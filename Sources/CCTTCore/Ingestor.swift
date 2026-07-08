@@ -98,3 +98,9 @@ public final class Ingestor {
         return result.sorted { $0.path < $1.path }
     }
 }
+
+/// Ingestor's only stored state is two immutable, `Sendable` `URL`s, so this
+/// conformance is a genuine `Sendable` type, not just a testability shim.
+/// Must live in this file: Swift 6 requires `Sendable`-implying conformances
+/// for a class to appear alongside its declaration.
+extension Ingestor: UsageScanning {}
