@@ -52,6 +52,11 @@ UI via SwiftUI previews + snapshot tests across live/estimated/credits/empty/deg
   (`UsageEvent`, `Rollup`, `PlanConfig`, `PlanStatus`, `UsageSnapshot`, `Provenance`).
 - Parsing/aggregation off the main actor; only publish the aggregated snapshot to UI.
 
+## Build / run / test
+- Build: `swift build`
+- Run (menu-bar app): `swift run CCTTApp`
+- Test: `swift test` (Swift Testing; filter with `--filter <TestSuiteOrName>`)
+
 ## Status
-Greenfield. Design approved 2026-07-08; implementation plan next (superpowers:writing-plans).
-No build/run/test commands yet — add them here once the Xcode/SwiftPM project exists.
+Plan 1 (foundation & data pipeline) complete: menu bar shows live total tokens
+parsed from `~/.claude/projects`. Next: Plan 2 (plan detection & limit engine).
