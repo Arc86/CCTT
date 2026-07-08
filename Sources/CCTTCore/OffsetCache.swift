@@ -5,9 +5,14 @@ public struct FileState: Sendable, Equatable, Codable {
     public var byteOffset: UInt64   // bytes already consumed (points at a line boundary)
     public var inode: UInt64        // detects file rotation/replacement
     public var size: UInt64         // last-seen size; shrinkage => truncation
+    // Last-seen mtime (seconds since epoch). Disambiguates an in-place rewrite
+    // that happens to leave the file at the same size from a genuine no-op scan
+    // (inode + size alone can't tell those apart).
+    public var modTime: TimeInterval
 
-    public init(byteOffset: UInt64, inode: UInt64, size: UInt64) {
+    public init(byteOffset: UInt64, inode: UInt64, size: UInt64, modTime: TimeInterval = 0) {
         self.byteOffset = byteOffset; self.inode = inode; self.size = size
+        self.modTime = modTime
     }
 }
 
