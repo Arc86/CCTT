@@ -14,6 +14,23 @@ public struct FileState: Sendable, Equatable, Codable {
         self.byteOffset = byteOffset; self.inode = inode; self.size = size
         self.modTime = modTime
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case byteOffset, inode, size, modTime
+    }
+
+    // Custom decoder so a cache JSON missing any key (e.g. one written before
+    // `modTime` existed, or after a future schema change) still decodes with
+    // sane defaults instead of throwing — which `OffsetCache.load`'s `try?`
+    // would otherwise turn into a silent full-cache reset. Synthesized
+    // `Decodable` ignores initializer defaults for absent keys, hence this.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        byteOffset = try c.decodeIfPresent(UInt64.self, forKey: .byteOffset) ?? 0
+        inode = try c.decodeIfPresent(UInt64.self, forKey: .inode) ?? 0
+        size = try c.decodeIfPresent(UInt64.self, forKey: .size) ?? 0
+        modTime = try c.decodeIfPresent(TimeInterval.self, forKey: .modTime) ?? 0
+    }
 }
 
 /// Maps absolute JSONL file path → last read position. Persisted as JSON.
