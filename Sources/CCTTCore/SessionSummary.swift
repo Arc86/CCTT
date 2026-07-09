@@ -1,7 +1,8 @@
 import Foundation
 
 /// A ranked recent-session row for the Sessions & Timeline tab.
-public struct SessionSummary: Sendable, Equatable {
+public struct SessionSummary: Sendable, Equatable, Identifiable {
+    public var id: String { sessionId }
     public let sessionId: String
     public let project: String
     public let totals: TokenTotals

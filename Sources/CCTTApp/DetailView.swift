@@ -40,6 +40,13 @@ struct DetailView: View {
                     .tabItem { Label("Models", systemImage: "cpu") }
                 AgentsSkillsPluginsTab(breakdown: breakdown, unit: display.unit)
                     .tabItem { Label("Agents", systemImage: "person.2") }
+                SessionsTimelineTab(timeline: store.timeline(range: display.timeRange),
+                                    sessions: store.sessions(range: display.timeRange),
+                                    unit: display.unit)
+                    .tabItem { Label("Sessions", systemImage: "clock") }
+                ContextWindowsTab(summaries: store.contextSummaries(range: display.timeRange),
+                                  seriesProvider: { store.contextSeries(sessionId: $0) })
+                    .tabItem { Label("Context", systemImage: "square.stack.3d.up") }
             }
         }
         .frame(minWidth: 660, minHeight: 480)

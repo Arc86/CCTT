@@ -42,7 +42,8 @@ public func contextSeries(events: [UsageEvent], sessionId: String) -> [ContextPo
 }
 
 /// Per-session context statistics for the Context Windows table.
-public struct ContextSessionSummary: Sendable, Equatable {
+public struct ContextSessionSummary: Sendable, Equatable, Identifiable {
+    public var id: String { sessionId }
     public let sessionId: String
     public let model: String
     public let ceiling: Int
