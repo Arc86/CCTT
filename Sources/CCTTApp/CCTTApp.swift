@@ -10,32 +10,44 @@ struct CCTTApp: App {
                           cacheURL: DefaultPaths.offsetCacheURL),
         clock: { Date() }
     )
+    @State private var planStore = PlanStore(
+        configURL: DefaultPaths.configURL,
+        clock: { Date() }
+    )
 
     var body: some Scene {
         MenuBarExtra {
-            PopoverView(snapshot: store.snapshot)
+            PopoverView(snapshot: store.snapshot, status: planStore.status)
         } label: {
-            // Headline for Plan 1: compact total token count. Plan 2 swaps this
-            // for "% of limit used".
+            // Headline: "% of limit used" (Plan 2), falling back to the token
+            // total when the plan/cap is unknown.
             Image(systemName: "gauge.with.dots.needle.33percent")
-            Text(DefaultPaths.formatTokens(store.snapshot.overall.total))
-                // Initial scan + periodic refresh (FSEvents watch added in a later
-                // plan). Verified in this environment: a `.task` loop tied to the
-                // label view's lifecycle reliably drives repeated `store.refresh()`
-                // calls and updates the rendered NSStatusItem text. An AppDelegate
-                // `@Published` tick bridged via `.onChange(of:)` on the Scene (and
-                // on this same view) was tried first per the original design but
-                // never fired in manual verification — the status item stayed
-                // frozen at the initial "0" — so that approach was replaced with
-                // this one. See task-8-report.md for verification evidence.
+                .foregroundStyle(glanceColor(planStore.status.headlinePercent))
+            Text(DefaultPaths.formatPercent(planStore.status,
+                                            fallbackTokens: store.snapshot.overall.total))
+                // Initial scan + periodic refresh. Verified in Plan 1: a `.task`
+                // loop tied to the label view reliably drives repeated refreshes
+                // and updates the NSStatusItem text. Plan 4 replaces the timer
+                // with an FSEvents watch.
                 .task {
                     while !Task.isCancelled {
                         store.refresh()
+                        await planStore.refresh(snapshot: store.snapshot)
                         try? await Task.sleep(for: .seconds(20))
                     }
                 }
         }
         .menuBarExtraStyle(.window)
+    }
+
+    /// Green → amber → red as the constraining limit approaches (spec §8.1).
+    private func glanceColor(_ percent: Double?) -> Color {
+        guard let p = percent else { return .secondary }
+        switch p {
+        case ..<0.8:  return .green
+        case ..<0.95: return .orange
+        default:      return .red
+        }
     }
 }
 

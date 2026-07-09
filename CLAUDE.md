@@ -58,5 +58,8 @@ UI via SwiftUI previews + snapshot tests across live/estimated/credits/empty/deg
 - Test: `swift test` (Swift Testing; filter with `--filter <TestSuiteOrName>`)
 
 ## Status
-Plan 1 (foundation & data pipeline) complete: menu bar shows live total tokens
-parsed from `~/.claude/projects`. Next: Plan 2 (plan detection & limit engine).
+Plan 2 (plan detection & limit engine) complete: the menu bar shows "% of limit
+used" (estimate path) from a `PlanDetector` + `LimitEngine` computing `PlanStatus`
+against bundled cap/price tables, with rolling 5h/weekly/month windows. Live
+limits are stubbed behind `LiveLimitProvider`. Next: Plan 3 (detail UI, 5 tabs,
+Swift Charts, $ ⇄ tokens toggle).
