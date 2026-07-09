@@ -12,6 +12,19 @@ public enum DisplayUnit: Sendable, Equatable, CaseIterable {
         case .dollars: return "≈ $"
         }
     }
+
+    /// Stable identifier for `UserDefaults` persistence (independent of case order).
+    public var storageKey: String {
+        switch self {
+        case .tokens:  return "tokens"
+        case .dollars: return "dollars"
+        }
+    }
+
+    /// Decode a persisted key, defaulting to `.tokens` for nil/unknown input.
+    public init(storageKey: String?) {
+        self = DisplayUnit.allCases.first { $0.storageKey == storageKey } ?? .tokens
+    }
 }
 
 /// The detail window's global time-range control.
@@ -30,6 +43,22 @@ public enum TimeRange: Sendable, Equatable, CaseIterable {
         case .last30Days: return "30 days"
         case .all:        return "All"
         }
+    }
+
+    /// Stable identifier for `UserDefaults` persistence (independent of case order).
+    public var storageKey: String {
+        switch self {
+        case .fiveHour:   return "fiveHour"
+        case .thisWeek:   return "thisWeek"
+        case .last7Days:  return "last7Days"
+        case .last30Days: return "last30Days"
+        case .all:        return "all"
+        }
+    }
+
+    /// Decode a persisted key, defaulting to `.all` for nil/unknown input.
+    public init(storageKey: String?) {
+        self = TimeRange.allCases.first { $0.storageKey == storageKey } ?? .all
     }
 
     /// The half-open-ish window `[start, now]` this range selects, or `nil` for

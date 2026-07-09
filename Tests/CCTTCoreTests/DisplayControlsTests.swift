@@ -31,3 +31,15 @@ private let now = Date(timeIntervalSince1970: 1_783_000_000)
     #expect(!DisplayUnit.dollars.displayName.isEmpty)
     #expect(TimeRange.allCases.allSatisfy { !$0.displayName.isEmpty })
 }
+
+@Test func storageKeysRoundTrip() {
+    for u in DisplayUnit.allCases { #expect(DisplayUnit(storageKey: u.storageKey) == u) }
+    for r in TimeRange.allCases { #expect(TimeRange(storageKey: r.storageKey) == r) }
+}
+
+@Test func unknownStorageKeyFallsBackToDefault() {
+    #expect(DisplayUnit(storageKey: nil) == .tokens)
+    #expect(DisplayUnit(storageKey: "bogus") == .tokens)
+    #expect(TimeRange(storageKey: nil) == .all)
+    #expect(TimeRange(storageKey: "bogus") == .all)
+}

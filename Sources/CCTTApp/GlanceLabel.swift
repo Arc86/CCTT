@@ -1,11 +1,17 @@
 import SwiftUI
 import CCTTCore
 
-/// Popover contents: plan headline + limit windows + usage breakdown.
-/// Richer charts land in Plan 3; this proves the pipeline end-to-end.
+/// Popover contents: plan headline + limit windows + top offenders + actions.
+/// Reads the shared stores from the environment; the detail charts live in the
+/// separate `DetailView` window opened via "Open Details…".
 struct PopoverView: View {
-    let snapshot: UsageSnapshot
-    let status: PlanStatus
+    @Environment(UsageStore.self) private var store
+    @Environment(PlanStore.self) private var planStore
+    @Environment(DisplayState.self) private var display
+    @Environment(\.openWindow) private var openWindow
+
+    private var status: PlanStatus { planStore.status }
+    private var snapshot: UsageSnapshot { store.snapshot }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -37,28 +43,46 @@ struct PopoverView: View {
                 Text("Credits enabled").font(.caption).foregroundStyle(.secondary)
             }
 
-            if !snapshot.byProject.isEmpty {
-                Divider()
-                Text("Top projects").font(.caption.bold())
-                ForEach(snapshot.byProject.prefix(5), id: \.key) { r in
-                    HStack {
-                        Text(r.key).lineLimit(1)
-                        Spacer()
-                        Text(DefaultPaths.formatTokens(r.totals.total))
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.callout)
-                }
-            }
+            topOffenders
+
             if snapshot.parseErrors > 0 {
                 Text("\(snapshot.parseErrors) unparsed lines")
                     .font(.caption2).foregroundStyle(.orange)
             }
+
             Divider()
-            Button("Quit CCTT") { NSApplication.shared.terminate(nil) }
+            HStack {
+                Button("Open Details…") { openWindow(id: "details") }
+                Spacer()
+                Button("Quit") { NSApplication.shared.terminate(nil) }
+            }
         }
         .padding(12)
-        .frame(width: 260)
+        .frame(width: 280)
+    }
+
+    /// Top projects for the selected range, honoring the $⇄tokens unit toggle.
+    @ViewBuilder
+    private var topOffenders: some View {
+        let rows = store.breakdown(range: display.timeRange).byProject.prefix(5)
+        if !rows.isEmpty {
+            Divider()
+            HStack {
+                Text("Top projects").font(.caption.bold())
+                Spacer()
+                Text(display.timeRange.displayName).font(.caption2).foregroundStyle(.secondary)
+            }
+            ForEach(Array(rows), id: \.key) { r in
+                HStack {
+                    Text(r.key).lineLimit(1)
+                    Spacer()
+                    Text(DefaultPaths.formatValue(totals: r.totals, costUSD: r.costUSD,
+                                                  unit: display.unit))
+                        .foregroundStyle(.secondary).monospacedDigit()
+                }
+                .font(.callout)
+            }
+        }
     }
 
     private var provenanceLabel: String {
