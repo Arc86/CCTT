@@ -58,6 +58,24 @@ UI via SwiftUI previews + snapshot tests across live/estimated/credits/empty/deg
 - Test: `swift test` (Swift Testing; filter with `--filter <TestSuiteOrName>`)
 
 ## Status
+Plan 4 (live limits, credits, alerts, Settings, onboarding) complete. The live
+path is fully isolated and TDD'd in `CCTTCore`: `LiveLimitsDecoder` parses the
+(unofficial) rate-limit endpoint JSON; `ClaudeCredentialsDecoder` +
+`KeychainCredentialsSource` read Claude Code's OAuth token read-only from the
+Keychain (`CredentialsSource` seam); `NetworkLiveLimitProvider` composes them
+over an injectable `HTTPTransport` and degrades to `nil` on any failure;
+`GatedLiveLimitProvider` makes live strictly opt-in (no Keychain/network until
+enabled). `AlertEngine` is a pure edge-triggered evaluator (`AlertState` is
+Codable/persisted; fires once per threshold crossing, re-arms on window reset).
+`AppSettings` is one lenient-Codable value type (manual plan override, API
+budget, manual caps, thresholds, hidden tabs); `LimitEngine.status` now honors
+a `manualCaps` fallback and a `settingsProvider` on `PlanStore`. App shell (thin):
+`SettingsStore`/`AppSettingsStorage` (UserDefaults), a `⌘,` `TabView` Settings
+scene (Plan/Live/Alerts/Display/Data), first-launch `OnboardingView`, and
+`NotificationManager` (guarded `UNUserNotificationCenter` shell over
+`AlertEngine`). Popover renders credits (`MoneyFormat`, `.billed`/`.estimated`)
+and live reset countdowns. 142 tests green.
+
 Plan 3 (detail UI) complete: a resizable **detail `Window`** opened from the
 popover shows five Swift-Charts tabs — Projects, Models, Agents/Skills/Plugins
 (Plan 3A, over the pure `breakdown()` builder) and Sessions & Timeline + Context
@@ -66,5 +84,3 @@ A global **time-range** control and a **$ ⇄ tokens** toggle (persisted via
 `DisplayState` + `UserDefaults`) drive every tab; derived $ is attributed
 per-event and always carries a "≈" affordance. All range/cost/timeline/context
 aggregation is pure and TDD'd in `CCTTCore`; views are thin (previews only).
-Next: Plan 4 (live limits + Keychain OAuth, credits, threshold alerts, Settings
-scene, first-launch onboarding).

@@ -1,7 +1,7 @@
 import Foundation
 
 /// The kind of Claude Code plan CCTT is observing.
-public enum PlanKind: Sendable, Equatable {
+public enum PlanKind: String, Sendable, Equatable, Codable {
     case subscription   // Pro / Max — rate-limited rolling windows
     case api            // pay-as-you-go — a dollar budget, not a token cap
     case enterprise     // org seat — window-based if a tier is detectable

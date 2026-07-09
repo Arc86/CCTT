@@ -30,6 +30,9 @@ struct PopoverView: View {
                     HStack {
                         Text(windowName(w.kind))
                         Spacer()
+                        if let reset = w.resetsAt {
+                            Text(resetText(reset)).font(.caption2).foregroundStyle(.tertiary)
+                        }
                         Text(percentText(w.percent))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
@@ -38,10 +41,7 @@ struct PopoverView: View {
                 }
             }
 
-            if let credits = status.credits, credits.enabled {
-                Divider()
-                Text("Credits enabled").font(.caption).foregroundStyle(.secondary)
-            }
+            creditsLine
 
             topOffenders
 
@@ -54,11 +54,38 @@ struct PopoverView: View {
             HStack {
                 Button("Open Details…") { openWindow(id: "details") }
                 Spacer()
+                SettingsLink { Image(systemName: "gear") }
+                    .buttonStyle(.borderless)
                 Button("Quit") { NSApplication.shared.terminate(nil) }
             }
         }
         .padding(12)
         .frame(width: 280)
+    }
+
+    /// Credit balance / spend, only when extra usage is enabled. Live values are
+    /// real billed money (`.billed`); the grant-cache fallback is `.estimated`.
+    @ViewBuilder
+    private var creditsLine: some View {
+        if let credits = status.credits, credits.enabled {
+            Divider()
+            HStack {
+                Text("Credits").font(.caption.bold())
+                Spacer()
+                Text(creditsText(credits))
+                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            }
+        }
+    }
+
+    private func creditsText(_ c: CreditsStatus) -> String {
+        let left = MoneyFormat.string(minorUnits: c.balanceMinorUnits, currency: c.currency)
+        guard let used = c.usedThisPeriodMinorUnits else { return "\(left) left" }
+        return "\(left) left · \(MoneyFormat.string(minorUnits: used, currency: c.currency)) used"
+    }
+
+    private func resetText(_ date: Date) -> String {
+        "resets \(date.formatted(.relative(presentation: .named)))"
     }
 
     /// Top projects for the selected range, honoring the $⇄tokens unit toggle.

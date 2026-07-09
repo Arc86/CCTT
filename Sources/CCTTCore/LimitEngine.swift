@@ -11,13 +11,16 @@ public enum LimitEngine {
         prices: PriceTable,
         live: LiveLimits?,
         apiMonthlyBudgetUSD: Double?,
+        manualCaps: WindowCaps? = nil,
         now: Date
     ) -> PlanStatus {
         let creditsStatus = credits(plan: plan, live: live)
 
         switch plan.kind {
         case .subscription, .enterprise:
-            let tierCaps = caps.caps(forTier: plan.rateLimitTier)
+            // Tier cap wins; fall back to a user-entered manual cap when the
+            // tier is unknown (enterprise / unrecognised tier).
+            let tierCaps = caps.caps(forTier: plan.rateLimitTier) ?? manualCaps
             let isLive = live?.fiveHourPercent != nil || live?.weeklyPercent != nil
             let five = windowStatus(kind: .fiveHour, used: snapshot.fiveHour.total,
                                     cap: tierCaps?.fiveHourTokens,

@@ -6,6 +6,11 @@ import CCTTCore
 struct DetailView: View {
     @Environment(UsageStore.self) private var store
     @Environment(DisplayState.self) private var display
+    @Environment(SettingsStore.self) private var settingsStore
+
+    private func isVisible(_ tab: DetailTab) -> Bool {
+        !settingsStore.settings.hiddenTabs.contains(tab.id)
+    }
 
     var body: some View {
         @Bindable var display = display
@@ -34,19 +39,29 @@ struct DetailView: View {
             Divider()
 
             TabView {
-                ProjectsTab(breakdown: breakdown, unit: display.unit)
-                    .tabItem { Label("Projects", systemImage: "folder") }
-                ModelsTab(breakdown: breakdown, unit: display.unit)
-                    .tabItem { Label("Models", systemImage: "cpu") }
-                AgentsSkillsPluginsTab(breakdown: breakdown, unit: display.unit)
-                    .tabItem { Label("Agents", systemImage: "person.2") }
-                SessionsTimelineTab(timeline: store.timeline(range: display.timeRange),
-                                    sessions: store.sessions(range: display.timeRange),
-                                    unit: display.unit)
-                    .tabItem { Label("Sessions", systemImage: "clock") }
-                ContextWindowsTab(summaries: store.contextSummaries(range: display.timeRange),
-                                  seriesProvider: { store.contextSeries(sessionId: $0) })
-                    .tabItem { Label("Context", systemImage: "square.stack.3d.up") }
+                if isVisible(.projects) {
+                    ProjectsTab(breakdown: breakdown, unit: display.unit)
+                        .tabItem { Label("Projects", systemImage: "folder") }
+                }
+                if isVisible(.models) {
+                    ModelsTab(breakdown: breakdown, unit: display.unit)
+                        .tabItem { Label("Models", systemImage: "cpu") }
+                }
+                if isVisible(.agents) {
+                    AgentsSkillsPluginsTab(breakdown: breakdown, unit: display.unit)
+                        .tabItem { Label("Agents", systemImage: "person.2") }
+                }
+                if isVisible(.sessions) {
+                    SessionsTimelineTab(timeline: store.timeline(range: display.timeRange),
+                                        sessions: store.sessions(range: display.timeRange),
+                                        unit: display.unit)
+                        .tabItem { Label("Sessions", systemImage: "clock") }
+                }
+                if isVisible(.context) {
+                    ContextWindowsTab(summaries: store.contextSummaries(range: display.timeRange),
+                                      seriesProvider: { store.contextSeries(sessionId: $0) })
+                        .tabItem { Label("Context", systemImage: "square.stack.3d.up") }
+                }
             }
         }
         .frame(minWidth: 660, minHeight: 480)
