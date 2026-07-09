@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:CCTT}",
+            "name": "Debug CCTTApp",
+            "target": "CCTTApp",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug CCTTApp"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:CCTT}",
+            "name": "Release CCTTApp",
+            "target": "CCTTApp",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release CCTTApp"
+        }
+    ]
+}

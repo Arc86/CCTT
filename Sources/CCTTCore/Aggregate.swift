@@ -1,8 +1,9 @@
 import Foundation
 
-/// Pure aggregation: de-duplicated events → grouped, sorted rollups.
-public func aggregate(events: [UsageEvent], parseErrors: Int, now: Date) -> UsageSnapshot {
-    // De-dup: keep one event per dedupKey; nil-key events are always kept.
+/// Keep one event per `dedupKey`; events lacking a key are always kept.
+/// Shared by `aggregate` and the on-demand detail-window builders so every
+/// consumer counts each `(requestId, messageId)` exactly once.
+func deduplicated(_ events: [UsageEvent]) -> [UsageEvent] {
     var seen = Set<String>()
     var unique: [UsageEvent] = []
     unique.reserveCapacity(events.count)
@@ -13,6 +14,12 @@ public func aggregate(events: [UsageEvent], parseErrors: Int, now: Date) -> Usag
             unique.append(e)
         }
     }
+    return unique
+}
+
+/// Pure aggregation: de-duplicated events → grouped, sorted rollups.
+public func aggregate(events: [UsageEvent], parseErrors: Int, now: Date) -> UsageSnapshot {
+    let unique = deduplicated(events)
 
     let fiveHourStart = now.addingTimeInterval(-5 * 3600)
     let weeklyStart = now.addingTimeInterval(-7 * 24 * 3600)
