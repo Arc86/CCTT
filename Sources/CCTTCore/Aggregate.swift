@@ -14,6 +14,12 @@ public func aggregate(events: [UsageEvent], parseErrors: Int, now: Date) -> Usag
         }
     }
 
+    let fiveHourStart = now.addingTimeInterval(-5 * 3600)
+    let weeklyStart = now.addingTimeInterval(-7 * 24 * 3600)
+    var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone(identifier: "UTC")!
+    let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
+
     var overall = TokenTotals.zero
     var project: [String: TokenTotals] = [:]
     var model: [String: TokenTotals] = [:]
@@ -21,6 +27,10 @@ public func aggregate(events: [UsageEvent], parseErrors: Int, now: Date) -> Usag
     var agentKind: [String: TokenTotals] = [:]
     var skill: [String: TokenTotals] = [:]
     var plugin: [String: TokenTotals] = [:]
+    var fiveHour = TokenTotals.zero
+    var weekly = TokenTotals.zero
+    var monthToDate = TokenTotals.zero
+    var monthModel: [String: TokenTotals] = [:]
 
     for e in unique {
         let t = e.totals
@@ -31,6 +41,12 @@ public func aggregate(events: [UsageEvent], parseErrors: Int, now: Date) -> Usag
         agentKind[e.agentKind, default: .zero] += t
         if let s = e.skill { skill[s, default: .zero] += t }
         if let p = e.plugin { plugin[p, default: .zero] += t }
+        if e.timestamp > fiveHourStart { fiveHour += t }
+        if e.timestamp > weeklyStart { weekly += t }
+        if e.timestamp >= monthStart {
+            monthToDate += t
+            monthModel[e.model, default: .zero] += t
+        }
     }
 
     return UsageSnapshot(
@@ -41,6 +57,10 @@ public func aggregate(events: [UsageEvent], parseErrors: Int, now: Date) -> Usag
         byAgentKind: sortedRollups(agentKind),
         bySkill: sortedRollups(skill),
         byPlugin: sortedRollups(plugin),
+        fiveHour: fiveHour,
+        weekly: weekly,
+        monthToDate: monthToDate,
+        monthByModel: sortedRollups(monthModel),
         parseErrors: parseErrors,
         generatedAt: now
     )

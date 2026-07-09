@@ -18,21 +18,31 @@ public struct UsageSnapshot: Sendable, Equatable {
     public let byAgentKind: [Rollup]
     public let bySkill: [Rollup]
     public let byPlugin: [Rollup]
+    // Rolling / calendar windows for the limit engine (Plan 2).
+    public let fiveHour: TokenTotals      // rolling last 5 hours
+    public let weekly: TokenTotals        // rolling last 7 days
+    public let monthToDate: TokenTotals   // calendar month-to-date (UTC)
+    public let monthByModel: [Rollup]     // month-to-date, per model (for $ cost)
     public let parseErrors: Int
     public let generatedAt: Date
 
     public static func empty(now: Date) -> UsageSnapshot {
         UsageSnapshot(overall: .zero, byProject: [], byModel: [], bySession: [],
                       byAgentKind: [], bySkill: [], byPlugin: [],
+                      fiveHour: .zero, weekly: .zero, monthToDate: .zero, monthByModel: [],
                       parseErrors: 0, generatedAt: now)
     }
 
     public init(overall: TokenTotals, byProject: [Rollup], byModel: [Rollup],
                 bySession: [Rollup], byAgentKind: [Rollup], bySkill: [Rollup],
-                byPlugin: [Rollup], parseErrors: Int, generatedAt: Date) {
+                byPlugin: [Rollup], fiveHour: TokenTotals, weekly: TokenTotals,
+                monthToDate: TokenTotals, monthByModel: [Rollup],
+                parseErrors: Int, generatedAt: Date) {
         self.overall = overall; self.byProject = byProject; self.byModel = byModel
         self.bySession = bySession; self.byAgentKind = byAgentKind
         self.bySkill = bySkill; self.byPlugin = byPlugin
+        self.fiveHour = fiveHour; self.weekly = weekly
+        self.monthToDate = monthToDate; self.monthByModel = monthByModel
         self.parseErrors = parseErrors; self.generatedAt = generatedAt
     }
 }
