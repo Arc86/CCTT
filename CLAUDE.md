@@ -58,8 +58,13 @@ UI via SwiftUI previews + snapshot tests across live/estimated/credits/empty/deg
 - Test: `swift test` (Swift Testing; filter with `--filter <TestSuiteOrName>`)
 
 ## Status
-Plan 2 (plan detection & limit engine) complete: the menu bar shows "% of limit
-used" (estimate path) from a `PlanDetector` + `LimitEngine` computing `PlanStatus`
-against bundled cap/price tables, with rolling 5h/weekly/month windows. Live
-limits are stubbed behind `LiveLimitProvider`. Next: Plan 3 (detail UI, 5 tabs,
-Swift Charts, $ ⇄ tokens toggle).
+Plan 3 (detail UI) complete: a resizable **detail `Window`** opened from the
+popover shows five Swift-Charts tabs — Projects, Models, Agents/Skills/Plugins
+(Plan 3A, over the pure `breakdown()` builder) and Sessions & Timeline + Context
+Windows (Plan 3B, over `timelineSeries`/`sessionSummaries`/`contextSummaries`).
+A global **time-range** control and a **$ ⇄ tokens** toggle (persisted via
+`DisplayState` + `UserDefaults`) drive every tab; derived $ is attributed
+per-event and always carries a "≈" affordance. All range/cost/timeline/context
+aggregation is pure and TDD'd in `CCTTCore`; views are thin (previews only).
+Next: Plan 4 (live limits + Keychain OAuth, credits, threshold alerts, Settings
+scene, first-launch onboarding).
