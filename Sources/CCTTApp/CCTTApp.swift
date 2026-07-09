@@ -14,10 +14,14 @@ struct CCTTApp: App {
         configURL: DefaultPaths.configURL,
         clock: { Date() }
     )
+    @State private var display = DisplayState()
 
     var body: some Scene {
         MenuBarExtra {
-            PopoverView(snapshot: store.snapshot, status: planStore.status)
+            PopoverView()
+                .environment(store)
+                .environment(planStore)
+                .environment(display)
         } label: {
             // Headline: "% of limit used" (Plan 2), falling back to the token
             // total when the plan/cap is unknown.
@@ -38,6 +42,15 @@ struct CCTTApp: App {
                 }
         }
         .menuBarExtraStyle(.window)
+
+        // Resizable detail window opened from the popover's "Open Details…".
+        Window("CCTT Details", id: "details") {
+            DetailView()
+                .environment(store)
+                .environment(planStore)
+                .environment(display)
+        }
+        .windowResizability(.contentMinSize)
     }
 
     /// Green → amber → red as the constraining limit approaches (spec §8.1).
