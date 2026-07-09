@@ -40,3 +40,19 @@ public struct StaticLiveLimitProvider: LiveLimitProvider {
     public init(_ value: LiveLimits?) { self.value = value }
     public func fetch() async -> LiveLimits? { value }
 }
+
+/// Wraps a real provider behind a runtime on/off gate (the user's "Live limits"
+/// setting). While disabled it returns `nil` without consulting the wrapped
+/// provider — so no Keychain access or network call happens until opted in.
+public struct GatedLiveLimitProvider: LiveLimitProvider {
+    private let wrapped: LiveLimitProvider
+    private let isEnabled: @Sendable () -> Bool
+
+    public init(wrapping wrapped: LiveLimitProvider, isEnabled: @escaping @Sendable () -> Bool) {
+        self.wrapped = wrapped; self.isEnabled = isEnabled
+    }
+
+    public func fetch() async -> LiveLimits? {
+        isEnabled() ? await wrapped.fetch() : nil
+    }
+}
