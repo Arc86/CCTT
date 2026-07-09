@@ -32,4 +32,11 @@ public final class UsageStore {
                              parseErrors: totalParseErrors,
                              now: clock())
     }
+
+    /// On-demand costed breakdown of the retained events for a chosen time range.
+    /// Raw events stay private (only the aggregated snapshot is published); the
+    /// detail window pulls this when its range or the underlying data changes.
+    public func breakdown(range: TimeRange, prices: PriceTable = .bundled) -> Breakdown {
+        CCTTCore.breakdown(events: accumulated, range: range, now: clock(), prices: prices)
+    }
 }

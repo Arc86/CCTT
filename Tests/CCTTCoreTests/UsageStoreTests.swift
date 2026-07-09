@@ -29,6 +29,23 @@ private final class StubScanner: UsageScanning, @unchecked Sendable {
 }
 
 @MainActor
+@Test func breakdownReflectsAccumulatedEvents() {
+    let now = Date(timeIntervalSince1970: 1_783_000_000)
+    let scanner = StubScanner()
+    scanner.queued = [ScanResult(events: [
+        UsageEvent.fixture(timestamp: now, output: 10, project: "P",
+                           requestId: "r1", messageId: "m1"),
+        UsageEvent.fixture(timestamp: now, output: 10, project: "P",   // duplicate ids
+                           requestId: "r1", messageId: "m1"),
+    ], parseErrors: 0)]
+    let store = UsageStore(scanner: scanner, clock: { now })
+    store.refresh()
+    let b = store.breakdown(range: .all)
+    #expect(b.byProject.first?.key == "P")
+    #expect(b.totals.eventCount == 1)   // deduped
+}
+
+@MainActor
 @Test func startsEmpty() {
     let store = UsageStore(scanner: StubScanner(),
                            clock: { Date(timeIntervalSince1970: 0) })
