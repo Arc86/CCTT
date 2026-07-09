@@ -10,11 +10,20 @@ struct CCTTApp: App {
                           cacheURL: DefaultPaths.offsetCacheURL),
         clock: { Date() }
     )
+    // Live limits are opt-in: the provider is gated on the persisted setting, so
+    // no Keychain/network access happens until the user enables it. Plan/budget/
+    // cap overrides are read from the same persisted settings each refresh.
     @State private var planStore = PlanStore(
         configURL: DefaultPaths.configURL,
+        provider: GatedLiveLimitProvider(
+            wrapping: NetworkLiveLimitProvider(),
+            isEnabled: { AppSettingsStorage.load().liveLimitsEnabled }),
+        settingsProvider: { AppSettingsStorage.load() },
         clock: { Date() }
     )
     @State private var display = DisplayState()
+    @State private var settingsStore = SettingsStore()
+    @State private var notifications = NotificationManager()
 
     var body: some Scene {
         MenuBarExtra {
@@ -22,24 +31,13 @@ struct CCTTApp: App {
                 .environment(store)
                 .environment(planStore)
                 .environment(display)
+                .environment(settingsStore)
         } label: {
-            // Headline: "% of limit used" (Plan 2), falling back to the token
-            // total when the plan/cap is unknown.
-            Image(systemName: "gauge.with.dots.needle.33percent")
-                .foregroundStyle(glanceColor(planStore.status.headlinePercent))
-            Text(DefaultPaths.formatPercent(planStore.status,
-                                            fallbackTokens: store.snapshot.overall.total))
-                // Initial scan + periodic refresh. Verified in Plan 1: a `.task`
-                // loop tied to the label view reliably drives repeated refreshes
-                // and updates the NSStatusItem text. Plan 4 replaces the timer
-                // with an FSEvents watch.
-                .task {
-                    while !Task.isCancelled {
-                        store.refresh()
-                        await planStore.refresh(snapshot: store.snapshot)
-                        try? await Task.sleep(for: .seconds(20))
-                    }
-                }
+            MenuBarLabel()
+                .environment(store)
+                .environment(planStore)
+                .environment(settingsStore)
+                .environment(notifications)
         }
         .menuBarExtraStyle(.window)
 
@@ -49,8 +47,58 @@ struct CCTTApp: App {
                 .environment(store)
                 .environment(planStore)
                 .environment(display)
+                .environment(settingsStore)
         }
         .windowResizability(.contentMinSize)
+
+        // First-launch onboarding (opened once until completed).
+        Window("Welcome to CCTT", id: "onboarding") {
+            OnboardingView()
+                .environment(settingsStore)
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+        .windowStyle(.hiddenTitleBar)
+
+        Settings {
+            SettingsView()
+                .environment(settingsStore)
+                .environment(planStore)
+                .environment(display)
+                .environment(notifications)
+        }
+    }
+}
+
+/// The menu-bar item: headline "% used" plus the periodic refresh loop that
+/// drives usage aggregation, limit computation, and threshold notifications.
+struct MenuBarLabel: View {
+    @Environment(UsageStore.self) private var store
+    @Environment(PlanStore.self) private var planStore
+    @Environment(SettingsStore.self) private var settingsStore
+    @Environment(NotificationManager.self) private var notifications
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        // A `.task` tied to the label reliably drives repeated refreshes and
+        // updates the NSStatusItem (verified in Plan 1).
+        Image(systemName: "gauge.with.dots.needle.33percent")
+            .foregroundStyle(glanceColor(planStore.status.headlinePercent))
+        Text(DefaultPaths.formatPercent(planStore.status,
+                                        fallbackTokens: store.snapshot.overall.total))
+            .task {
+                if !OnboardingState.hasOnboarded() {
+                    openWindow(id: "onboarding")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+                while !Task.isCancelled {
+                    store.refresh()
+                    await planStore.refresh(snapshot: store.snapshot)
+                    notifications.process(status: planStore.status,
+                                          settings: settingsStore.settings)
+                    try? await Task.sleep(for: .seconds(20))
+                }
+            }
     }
 
     /// Green → amber → red as the constraining limit approaches (spec §8.1).
