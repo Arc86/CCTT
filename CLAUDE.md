@@ -58,6 +58,22 @@ UI via SwiftUI previews + snapshot tests across live/estimated/credits/empty/deg
 - Test: `swift test` (Swift Testing; filter with `--filter <TestSuiteOrName>`)
 
 ## Status
+**Auto-update + start-at-login (2026-07-10):** the app now ships as a real,
+notarized `CCTTApp.app` (`packaging/package_app.sh` assembles + embeds
+`Sparkle.framework` + deep-signs with the Developer ID; `packaging/release.sh`
+notarizes, staples, EdDSA-signs, and appends to `appcast.xml`, fed from
+`raw.githubusercontent.com/Arc86/CCTT/main/appcast.xml` with GitHub Release
+zip assets). **Sparkle** auto-update (`SparkleUpdater` over
+`SPUStandardUpdaterController`, behind the `SoftwareUpdating` seam) and
+**start-at-login** (`SystemLoginItem` over `SMAppService.mainApp`, behind
+`LoginItemControlling` with a revert-on-error `LoginItemToggle`) surface in a
+new **General** settings pane plus a popover "Check for Updates…". Both controls
+degrade to disabled (with a caption) on unbundled `run.sh` dev launches, gated
+by `AppBundling.isBundled`. Version display resolves via `AppVersion` (bundle
+short version → `coreVersion` fallback). `CCTTCore` stays dependency-free; Sparkle
+is a `CCTTApp`-only dependency. New pure units TDD'd in Core. Packaging runbook:
+`packaging/README.md`. 195 tests green.
+
 **Settings — Claude Desktop redesign (2026-07-10):** the `⌘,` Settings scene was
 re-styled from the System Settings idiom (a `NavigationSplitView`, which insisted on
 an inset floating sidebar with a disconnected horizontal titlebar) into a **fully

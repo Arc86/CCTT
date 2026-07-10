@@ -15,7 +15,13 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             resources: [.process("Resources")],
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: [.swiftLanguageMode(.v6)],
+            linkerSettings: [
+                // `packaging/package_app.sh` embeds Sparkle.framework under
+                // Contents/Frameworks; SwiftPM doesn't add that rpath by default,
+                // so the packaged bundle can't dyld-load Sparkle without it.
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
+            ]
         ),
         .target(
             name: "CCTTCore",
