@@ -62,7 +62,7 @@ struct GeneralPane: View {
                     }
                 HStack {
                     Button("Check for Updates…") { updater.checkForUpdates() }
-                        .disabled(!updater.canCheckForUpdates)
+                        .disabled(!bundled || !updater.canCheckForUpdates)
                     Spacer()
                     Text("CCTT v\(AppVersion.string(bundleShort: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String))")
                         .font(.caption).foregroundStyle(.secondary)
