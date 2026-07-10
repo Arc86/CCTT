@@ -42,12 +42,25 @@ cp -R "$SPARKLE_FW" "$CONTENTS/Frameworks/"
 
 echo "▶ Deep code-signing (inside-out, hardened runtime)…"
 FW="$CONTENTS/Frameworks/Sparkle.framework"
-# Sign nested helpers first, then the framework, then the app.
-codesign --force --options runtime --sign "$IDENTITY" \
-  "$FW/Versions/B/XPCServices/Installer.xpc" \
-  "$FW/Versions/B/XPCServices/Downloader.xpc" \
-  "$FW/Versions/B/Autoupdate" \
-  "$FW/Versions/B/Updater.app" 2>/dev/null || true
+# Re-sign every embedded Sparkle helper with OUR identity, inside-out, BEFORE
+# the framework and app. Use Versions/Current (the symlink Sparkle maintains)
+# so this survives a Sparkle version-letter bump. --deep on the bundles/xpc
+# re-signs their nested code with our team too (required for notarization; the
+# later --verify --strict would otherwise pass a Sparkle-team signature). Each
+# helper that EXISTS must sign successfully — no error swallowing, so a
+# mis-sign can't slip through.
+for rel in \
+  "Versions/Current/XPCServices/Installer.xpc" \
+  "Versions/Current/XPCServices/Downloader.xpc" \
+  "Versions/Current/Autoupdate" \
+  "Versions/Current/Updater.app"; do
+  helper="$FW/$rel"
+  if [ -e "$helper" ]; then
+    codesign --force --options runtime --deep --sign "$IDENTITY" "$helper"
+  else
+    echo "⚠ Sparkle helper not found (skipped): $rel"
+  fi
+done
 codesign --force --options runtime --sign "$IDENTITY" "$FW"
 codesign --force --options runtime \
   --identifier "com.jespermol.CCTT" \
