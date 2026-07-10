@@ -17,3 +17,14 @@ Package.resolved
 
 # Misc
 *.log
+
+# LLM / agent tooling & planning artifacts (not needed to build)
+docs/
+.serena/
+.claude/
+.claude.json
+
+# Claude Code runtime data — never commit real usage/credentials/PII
+*.jsonl
+events.jsonl
+credentials.json
