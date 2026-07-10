@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>CCTT</title>
+    <link>https://raw.githubusercontent.com/Arc86/CCTT/main/appcast.xml</link>
+    <description>Claude Code Token Tracker updates</description>
+    <language>en</language>
+    <!-- release.sh appends <item> entries here -->
+  </channel>
+</rss>

@@ -13,7 +13,8 @@ xcuserdata/
 # Swift Package Manager
 .build/
 .swiftpm/
-Package.resolved
+# Package.resolved is committed now that the app pins an external dependency
+# (Sparkle), so builds resolve reproducibly.
 
 # Misc
 *.log
