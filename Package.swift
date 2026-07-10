@@ -4,10 +4,16 @@ import PackageDescription
 let package = Package(
     name: "CCTT",
     platforms: [.macOS(.v15)],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
+    ],
     targets: [
         .executableTarget(
             name: "CCTTApp",
-            dependencies: ["CCTTCore"],
+            dependencies: [
+                "CCTTCore",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
