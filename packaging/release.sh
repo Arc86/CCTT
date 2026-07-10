@@ -15,7 +15,15 @@ ZIP="$ROOT/build/CCTTApp-$VERSION.zip"
 
 echo "▶ Notarizing…"
 ditto -c -k --keepParent "$APP" "$ZIP"
-xcrun notarytool submit "$ZIP" --keychain-profile "CCTT-notary" --wait
+NOTARY_JSON="$(xcrun notarytool submit "$ZIP" --keychain-profile "CCTT-notary" --wait --output-format json)"
+echo "$NOTARY_JSON"
+NOTARY_STATUS="$(printf '%s' "$NOTARY_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("status",""))')"
+if [ "$NOTARY_STATUS" != "Accepted" ]; then
+  echo "❌ Notarization not accepted (status: ${NOTARY_STATUS:-unknown}). Fetching log…"
+  SUBMISSION_ID="$(printf '%s' "$NOTARY_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("id",""))')"
+  [ -n "$SUBMISSION_ID" ] && xcrun notarytool log "$SUBMISSION_ID" --keychain-profile "CCTT-notary" || true
+  exit 1
+fi
 
 echo "▶ Stapling…"
 xcrun stapler staple "$APP"
@@ -26,7 +34,6 @@ echo "▶ EdDSA-signing the update…"
 SIGN_UPDATE="$(find "$ROOT/.build" -name 'sign_update' -type f | head -1)"
 [ -n "$SIGN_UPDATE" ] || { echo "sign_update tool not found in .build"; exit 1; }
 SIG_LINE="$("$SIGN_UPDATE" "$ZIP")"   # prints: sparkle:edSignature="…" length="…"
-LEN="$(stat -f%z "$ZIP")"
 PUBDATE="$(date -u +'%a, %d %b %Y %H:%M:%S +0000')"
 DL="https://github.com/Arc86/CCTT/releases/download/v$VERSION/CCTTApp-$VERSION.zip"
 
@@ -40,11 +47,16 @@ ITEM="    <item>
       <enclosure url=\"$DL\" $SIG_LINE type=\"application/octet-stream\" />
     </item>"
 # Insert before the closing </channel>
-python3 - "$ROOT/packaging/appcast.xml" "$ITEM" <<'PY'
+python3 - "$ROOT/packaging/appcast.xml" "$ITEM" "$VERSION" <<'PY'
 import sys
-path, item = sys.argv[1], sys.argv[2]
+path, item, version = sys.argv[1], sys.argv[2], sys.argv[3]
 xml = open(path).read()
-xml = xml.replace("  </channel>", item + "\n  </channel>", 1)
+if f"<sparkle:version>{version}</sparkle:version>" in xml:
+    sys.exit(f"appcast.xml already has an entry for version {version}; aborting to avoid a duplicate")
+anchor = "  </channel>"
+if anchor not in xml:
+    sys.exit("could not find the </channel> anchor in appcast.xml; aborting (the entry was NOT added)")
+xml = xml.replace(anchor, item + "\n" + anchor, 1)
 open(path, "w").write(xml)
 PY
 
