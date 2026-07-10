@@ -43,7 +43,6 @@ struct CCTTApp: App {
                 .environment(planStore)
                 .environment(display)
                 .environment(settingsStore)
-                .environment(\.softwareUpdater, updater)
         } label: {
             MenuBarLabel()
                 .environment(store)
