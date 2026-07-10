@@ -42,6 +42,18 @@ private func line(_ s: String) -> Data { Data(s.utf8) }
     #expect(JSONLParser.parseLine(line(json)) == .skipped)
 }
 
+@Test func parsesAiTitleLine() {
+    let json = #"{"type":"ai-title","sessionId":"s1","aiTitle":"Improve detail view perf"}"#
+    #expect(JSONLParser.parseLine(line(json))
+            == .sessionTitle(sessionId: "s1", title: "Improve detail view perf"))
+}
+
+@Test func skipsAiTitleLineWithoutTitleOrSession() {
+    #expect(JSONLParser.parseLine(line(#"{"type":"ai-title","sessionId":"s1"}"#)) == .skipped)
+    #expect(JSONLParser.parseLine(line(#"{"type":"ai-title","sessionId":"s1","aiTitle":""}"#)) == .skipped)
+    #expect(JSONLParser.parseLine(line(#"{"type":"ai-title","aiTitle":"t"}"#)) == .skipped)
+}
+
 @Test func skipsAssistantLineWithoutUsage() {
     let json = #"{"type":"assistant","message":{"model":"m","id":"x"}}"#
     #expect(JSONLParser.parseLine(line(json)) == .skipped)

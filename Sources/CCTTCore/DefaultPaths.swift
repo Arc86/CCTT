@@ -9,9 +9,31 @@ public enum DefaultPaths {
 
     /// `~/Library/Application Support/CCTT/offsets.json` — CCTT's own cache.
     public static var offsetCacheURL: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory,
-                                            in: .userDomainMask).first!
-        return base.appendingPathComponent("CCTT/offsets.json")
+        appSupportBase.appendingPathComponent("CCTT/offsets.json")
+    }
+
+    /// `~/Library/Application Support/CCTT/events.jsonl` — the durable event log
+    /// that lets historical usage survive an app restart (see `EventStore`).
+    public static var eventStoreURL: URL {
+        appSupportBase.appendingPathComponent("CCTT/events.jsonl")
+    }
+
+    /// `~/Library/Application Support/CCTT/session-titles.json` — durable
+    /// `sessionId → title` map so session titles survive a restart (see `SessionTitleStore`).
+    public static var sessionTitleStoreURL: URL {
+        appSupportBase.appendingPathComponent("CCTT/session-titles.json")
+    }
+
+    /// `~/Library/Application Support/CCTT/live-limits.json` — the last successful
+    /// live rate-limit sample, so the real (stale-labelled) number survives a
+    /// restart while the endpoint is throttled (see `StickyLiveLimitProvider`).
+    public static var liveLimitsCacheURL: URL {
+        appSupportBase.appendingPathComponent("CCTT/live-limits.json")
+    }
+
+    private static var appSupportBase: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory,
+                                 in: .userDomainMask).first!
     }
 
     /// Compact human-readable token magnitude: 999 → "999", 12_345 → "12.3K".
@@ -37,10 +59,15 @@ public enum DefaultPaths {
     }
 
     /// Render a bucket in the user's chosen unit: measured tokens or derived ≈$.
-    public static func formatValue(totals: TokenTotals, costUSD: Double, unit: DisplayUnit) -> String {
+    /// When every token in the bucket came from an unpriced model the dollar value
+    /// is "n/a" rather than a misleading "$0" (provenance stays explicit).
+    public static func formatValue(totals: TokenTotals, costUSD: Double, unit: DisplayUnit,
+                                   unpricedTokens: Int = 0) -> String {
         switch unit {
         case .tokens:  return formatTokens(totals.total)
-        case .dollars: return formatUSD(costUSD)
+        case .dollars:
+            if totals.total > 0, unpricedTokens == totals.total { return "n/a" }
+            return formatUSD(costUSD)
         }
     }
 

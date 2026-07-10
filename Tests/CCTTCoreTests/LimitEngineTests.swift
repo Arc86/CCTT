@@ -40,6 +40,30 @@ private func snapshot(fiveHour: TokenTotals = .zero, weekly: TokenTotals = .zero
     #expect(five.resetsAt == now)
     #expect(status.provenance == .live)
     #expect(status.headlinePercent == 0.42)
+    #expect(status.liveAsOf == nil)   // no observedAt on a hand-built sample
+}
+
+/// A stale-but-served live sample carries its age forward so the UI can label
+/// it ("Live · 12m ago") rather than presenting frozen data as current.
+@Test func liveAsOfCarriesTheSampleAge() {
+    let plan = PlanConfig(kind: .subscription, rateLimitTier: "default_claude_max_5x")
+    let observed = now.addingTimeInterval(-720)
+    let live = LiveLimits(fiveHourPercent: 0.42, observedAt: observed)
+    let status = LimitEngine.status(plan: plan, snapshot: snapshot(), caps: .bundled,
+                                    prices: .bundled, live: live,
+                                    apiMonthlyBudgetUSD: nil, now: now)
+    #expect(status.provenance == .live)
+    #expect(status.liveAsOf == observed)
+}
+
+/// With no live sample the estimate path carries no live timestamp.
+@Test func estimatedStatusHasNoLiveAsOf() {
+    let plan = PlanConfig(kind: .subscription, rateLimitTier: "default_claude_max_5x")
+    let status = LimitEngine.status(plan: plan, snapshot: snapshot(), caps: .bundled,
+                                    prices: .bundled, live: nil,
+                                    apiMonthlyBudgetUSD: nil, now: now)
+    #expect(status.provenance == .estimated)
+    #expect(status.liveAsOf == nil)
 }
 
 @Test func apiUsesMonthlyBudget() {

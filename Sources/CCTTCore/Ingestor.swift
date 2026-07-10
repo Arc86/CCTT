@@ -3,6 +3,14 @@ import Foundation
 public struct ScanResult: Sendable, Equatable {
     public let events: [UsageEvent]
     public let parseErrors: Int
+    /// `sessionId → latest title` seen in this scan (from Claude Code `ai-title` lines).
+    public let titles: [String: String]
+
+    public init(events: [UsageEvent], parseErrors: Int, titles: [String: String] = [:]) {
+        self.events = events
+        self.parseErrors = parseErrors
+        self.titles = titles
+    }
 }
 
 /// Reads new bytes from every `*.jsonl` under `projectsDir`, parsing only
@@ -20,6 +28,7 @@ public final class Ingestor {
         var cache = OffsetCache.load(from: cacheURL)
         var events: [UsageEvent] = []
         var parseErrors = 0
+        var titles: [String: String] = [:]
 
         for fileURL in jsonlFiles() {
             let path = fileURL.path
@@ -46,44 +55,47 @@ public final class Ingestor {
                 continue
             }
 
-            let (newEvents, errors, consumedTo) = readFrom(fileURL, offset: startOffset)
+            let (newEvents, newTitles, errors, consumedTo) = readFrom(fileURL, offset: startOffset)
             events.append(contentsOf: newEvents)
+            titles.merge(newTitles) { _, latest in latest }   // later scan/file wins
             parseErrors += errors
             cache[path] = FileState(byteOffset: consumedTo, inode: inode, size: size, modTime: modTime)
         }
 
         try? cache.save(to: cacheURL)
-        return ScanResult(events: events, parseErrors: parseErrors)
+        return ScanResult(events: events, parseErrors: parseErrors, titles: titles)
     }
 
-    /// Returns parsed events, error count, and the absolute offset up to which
-    /// complete lines were consumed (a partial trailing line is left unconsumed).
+    /// Returns parsed events, session titles, error count, and the absolute offset up to
+    /// which complete lines were consumed (a partial trailing line is left unconsumed).
     private func readFrom(_ url: URL, offset: UInt64)
-        -> (events: [UsageEvent], errors: Int, consumedTo: UInt64) {
+        -> (events: [UsageEvent], titles: [String: String], errors: Int, consumedTo: UInt64) {
         guard let handle = try? FileHandle(forReadingFrom: url) else {
-            return ([], 0, offset)
+            return ([], [:], 0, offset)
         }
         defer { try? handle.close() }
-        do { try handle.seek(toOffset: offset) } catch { return ([], 0, offset) }
+        do { try handle.seek(toOffset: offset) } catch { return ([], [:], 0, offset) }
         let data = (try? handle.readToEnd()) ?? Data()
-        guard !data.isEmpty else { return ([], 0, offset) }
+        guard !data.isEmpty else { return ([], [:], 0, offset) }
 
         // Find the last newline; only bytes up to and including it are complete.
         guard let lastNL = data.lastIndex(of: 0x0A) else {
-            return ([], 0, offset) // no complete line yet
+            return ([], [:], 0, offset) // no complete line yet
         }
         let completeData = data[data.startIndex...lastNL]
         var events: [UsageEvent] = []
+        var titles: [String: String] = [:]
         var errors = 0
         for lineData in completeData.split(separator: 0x0A, omittingEmptySubsequences: true) {
             switch JSONLParser.parseLine(Data(lineData)) {
             case .event(let e): events.append(e)
+            case .sessionTitle(let sid, let title): titles[sid] = title   // last-in-file wins
             case .malformed:    errors += 1
             case .skipped:      break
             }
         }
         let consumed = offset + UInt64(completeData.count)
-        return (events, errors, consumed)
+        return (events, titles, errors, consumed)
     }
 
     private func jsonlFiles() -> [URL] {

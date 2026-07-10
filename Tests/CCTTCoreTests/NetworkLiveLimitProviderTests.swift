@@ -34,7 +34,7 @@ struct NetworkLiveLimitProviderTests {
     }
 
     @Test func fetchesDecodesAndAuthorizes() async throws {
-        let json = Data(#"{ "five_hour": { "utilization": 0.5 } }"#.utf8)
+        let json = Data(#"{ "five_hour": { "utilization": 50 } }"#.utf8)  // 0–100 scale
         let transport = StubTransport(body: json, statusCode: 200)
         let provider = NetworkLiveLimitProvider(
             credentials: StaticCredentialsSource(creds()), transport: transport,
@@ -43,6 +43,17 @@ struct NetworkLiveLimitProviderTests {
         let live = await provider.fetch()
         #expect(live?.fiveHourPercent == 0.5)
         #expect(transport.lastRequest?.value(forHTTPHeaderField: "Authorization") == "Bearer tok-123")
+    }
+
+    @Test func stampsObservedAtOnSuccess() async {
+        let json = Data(#"{ "five_hour": { "utilization": 0.5 } }"#.utf8)
+        let clock = Date(timeIntervalSince1970: 1_783_000_123)
+        let provider = NetworkLiveLimitProvider(
+            credentials: StaticCredentialsSource(creds()),
+            transport: StubTransport(body: json, statusCode: 200),
+            endpoint: endpoint, clock: { clock })
+        // The stamp lets a later failing poll report the reading's age.
+        #expect(await provider.fetch()?.observedAt == clock)
     }
 
     @Test func returnsNilWithoutCredentials() async {

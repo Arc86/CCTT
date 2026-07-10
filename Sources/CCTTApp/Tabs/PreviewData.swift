@@ -13,13 +13,26 @@ extension TimeBucket {
     }
 }
 
+extension HourBucket {
+    static let previewProfile: [HourBucket] = (0..<24).map { h in
+        let avg = [0, 0, 0, 0, 0, 0, 20_000, 60_000, 140_000, 220_000, 180_000, 90_000,
+                   40_000, 70_000, 110_000, 130_000, 80_000, 50_000, 30_000, 40_000,
+                   20_000, 10_000, 0, 0][h]
+        return HourBucket(hour: h,
+                          totals: TokenTotals(output: avg, eventCount: avg > 0 ? 1 : 0),
+                          activeDays: avg > 0 ? 1 : 0,
+                          inThrottleWindow: (5...10).contains(h))
+    }
+}
+
 extension SessionSummary {
     static let previewRows: [SessionSummary] = [
-        SessionSummary(sessionId: "sess-abc123", project: "CCTT",
+        SessionSummary(sessionId: "sess-abc123", title: "Surface session titles in detail view",
+                       project: "CCTT",
                        totals: TokenTotals(input: 500_000, output: 80_000, eventCount: 30),
                        costUSD: 4.5, firstActivity: previewNow.addingTimeInterval(-7200),
                        lastActivity: previewNow.addingTimeInterval(-120)),
-        SessionSummary(sessionId: "sess-def456", project: "iCSDM",
+        SessionSummary(sessionId: "sess-def456", title: nil, project: "iCSDM",   // no title → ID fallback
                        totals: TokenTotals(input: 200_000, output: 30_000, eventCount: 12),
                        costUSD: 1.8, firstActivity: previewNow.addingTimeInterval(-20_000),
                        lastActivity: previewNow.addingTimeInterval(-9000)),
@@ -28,10 +41,11 @@ extension SessionSummary {
 
 extension ContextSessionSummary {
     static let previewRows: [ContextSessionSummary] = [
-        ContextSessionSummary(sessionId: "sess-abc123", model: "claude-opus-4-8[1m]",
+        ContextSessionSummary(sessionId: "sess-abc123", title: "Surface session titles in detail view",
+                              model: "claude-opus-4-8[1m]",
                               ceiling: 1_000_000, peakContext: 820_000, avgContext: 410_000,
                               peakPercentOfCeiling: 0.82, compactionCount: 2),
-        ContextSessionSummary(sessionId: "sess-def456", model: "claude-opus-4-8",
+        ContextSessionSummary(sessionId: "sess-def456", title: nil, model: "claude-opus-4-8",
                               ceiling: 200_000, peakContext: 150_000, avgContext: 90_000,
                               peakPercentOfCeiling: 0.75, compactionCount: 1),
     ]

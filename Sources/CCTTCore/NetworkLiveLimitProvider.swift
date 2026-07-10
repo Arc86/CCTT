@@ -46,6 +46,10 @@ public struct NetworkLiveLimitProvider: LiveLimitProvider {
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode)
         else { return nil }
 
-        return LiveLimitsDecoder.decode(data)
+        // Stamp when this reading came off the wire so the sticky cache and UI
+        // can report its age if later polls fail (e.g. the endpoint 429s).
+        guard var live = LiveLimitsDecoder.decode(data) else { return nil }
+        live.observedAt = clock()
+        return live
     }
 }

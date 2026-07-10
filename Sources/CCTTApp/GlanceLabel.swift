@@ -1,9 +1,10 @@
 import SwiftUI
+import AppKit
 import CCTTCore
 
-/// Popover contents: plan headline + limit windows + top offenders + actions.
+/// Popover contents: plan headline + limit gauges + top offenders + actions.
 /// Reads the shared stores from the environment; the detail charts live in the
-/// separate `DetailView` window opened via "Open Details…".
+/// separate `DetailView` window opened via "Details…".
 struct PopoverView: View {
     @Environment(UsageStore.self) private var store
     @Environment(PlanStore.self) private var planStore
@@ -14,112 +15,159 @@ struct PopoverView: View {
     private var snapshot: UsageSnapshot { store.snapshot }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(status.planLabel).font(.headline)
-                Spacer()
-                Text(provenanceLabel)
-                    .font(.caption2).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 13) {
+            header
+            limits
+
+            if hasSecondarySections {
+                Divider()
+                creditsLine
+                topOffenders
             }
-
-            if status.windows.isEmpty {
-                Text("Total tokens: \(DefaultPaths.formatTokens(snapshot.overall.total))")
-                    .font(.subheadline)
-            } else {
-                ForEach(status.windows, id: \.kind) { w in
-                    HStack {
-                        Text(windowName(w.kind))
-                        Spacer()
-                        if let reset = w.resetsAt {
-                            Text(resetText(reset)).font(.caption2).foregroundStyle(.tertiary)
-                        }
-                        Text(percentText(w.percent))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    .font(.callout)
-                }
-            }
-
-            creditsLine
-
-            topOffenders
 
             if snapshot.parseErrors > 0 {
-                Text("\(snapshot.parseErrors) unparsed lines")
+                Label("\(snapshot.parseErrors) unparsed lines", systemImage: "exclamationmark.triangle")
                     .font(.caption2).foregroundStyle(.orange)
             }
 
             Divider()
-            HStack {
-                Button("Open Details…") { openWindow(id: "details") }
-                Spacer()
-                SettingsLink { Image(systemName: "gear") }
-                    .buttonStyle(.borderless)
-                Button("Quit") { NSApplication.shared.terminate(nil) }
+            footer
+        }
+        .padding(14)
+        .frame(width: 320)
+    }
+
+    // MARK: Header
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(status.planLabel)
+                .font(.system(size: 15, weight: .bold))
+                .tracking(-0.15)
+            Spacer()
+            ProvenanceBadge(provenance: status.provenance, liveAsOf: status.liveAsOf)
+        }
+    }
+
+    // MARK: Limit gauges
+
+    @ViewBuilder private var limits: some View {
+        if status.windows.isEmpty {
+            Label("\(DefaultPaths.formatTokens(snapshot.overall.total)) tokens total",
+                  systemImage: "sum")
+                .font(.subheadline).foregroundStyle(.secondary)
+        } else {
+            VStack(spacing: 13) {
+                ForEach(status.windows, id: \.kind) { w in
+                    LimitGaugeRow(name: windowName(w.kind), window: w)
+                }
             }
         }
-        .padding(12)
-        .frame(width: 280)
+    }
+
+    // MARK: Secondary sections
+
+    private var hasSecondarySections: Bool {
+        (status.credits?.enabled ?? false)
+            || !store.breakdown(range: display.timeRange).byProject.isEmpty
     }
 
     /// Credit balance / spend, only when extra usage is enabled. Live values are
     /// real billed money (`.billed`); the grant-cache fallback is `.estimated`.
-    @ViewBuilder
-    private var creditsLine: some View {
+    @ViewBuilder private var creditsLine: some View {
         if let credits = status.credits, credits.enabled {
-            Divider()
             HStack {
-                Text("Credits").font(.caption.bold())
+                Label("Credits", systemImage: "creditcard").font(.caption.weight(.medium))
                 Spacer()
                 Text(creditsText(credits))
                     .font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
+            .accessibilityElement(children: .combine)
         }
     }
+
+    /// Top projects for the selected range, honoring the $⇄tokens unit toggle.
+    /// A faint share bar behind each row encodes its slice of usage relative to
+    /// the busiest project; the percent column is its share of the grand total.
+    @ViewBuilder private var topOffenders: some View {
+        let all = store.breakdown(range: display.timeRange).byProject
+        let rows = Array(all.prefix(5))
+        if !rows.isEmpty {
+            // Share math is token-based (the natural unit of "how much did this
+            // project use"), regardless of the $⇄tokens display toggle.
+            let grandTotal = all.reduce(0) { $0 + $1.totals.total }
+            let maxTotal = rows.first?.totals.total ?? 0
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 7) {
+                    Image(systemName: "folder")
+                    Text("Top projects").font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Text(display.timeRange.displayName)
+                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 9)
+
+                ForEach(rows, id: \.key) { r in
+                    ShareProjectRow(
+                        name: r.key,
+                        value: DefaultPaths.formatValue(totals: r.totals, costUSD: r.costUSD,
+                                                        unit: display.unit),
+                        share: grandTotal > 0 ? Double(r.totals.total) / Double(grandTotal) : 0,
+                        barFraction: maxTotal > 0 ? Double(r.totals.total) / Double(maxTotal) : 0)
+                }
+            }
+        }
+    }
+
+    // MARK: Footer actions
+
+    private var footer: some View {
+        HStack(spacing: 10) {
+            Button("Details…") {
+                openWindow(id: "details")
+                // Menu-bar-only (.accessory) apps aren't frontmost, so a freshly
+                // opened window would appear behind other apps — activate first.
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            Spacer()
+            Button { refresh() } label: { Image(systemName: "arrow.clockwise") }
+                .buttonStyle(.borderless)
+                .keyboardShortcut("r")
+                .help("Refresh now (⌘R)")
+                .accessibilityLabel("Refresh now")
+            Button {
+                openWindow(id: "settings")
+                // Menu-bar-only (.accessory) apps aren't frontmost, so activate so
+                // the Settings window opens in front, not behind other apps.
+                NSApp.activate(ignoringOtherApps: true)
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .buttonStyle(.borderless)
+            .keyboardShortcut(",", modifiers: .command)
+            .help("Settings (⌘,)")
+            .accessibilityLabel("Settings")
+            Button("Quit") { NSApplication.shared.terminate(nil) }
+                .keyboardShortcut("q")
+        }
+        .font(.callout)
+    }
+
+    /// Manual refresh: re-scan events, then recompute the limit status.
+    private func refresh() {
+        store.refresh()
+        Task { await planStore.refresh(snapshot: store.snapshot) }
+    }
+
+    // MARK: Formatting
 
     private func creditsText(_ c: CreditsStatus) -> String {
         let left = MoneyFormat.string(minorUnits: c.balanceMinorUnits, currency: c.currency)
         guard let used = c.usedThisPeriodMinorUnits else { return "\(left) left" }
         return "\(left) left · \(MoneyFormat.string(minorUnits: used, currency: c.currency)) used"
-    }
-
-    private func resetText(_ date: Date) -> String {
-        "resets \(date.formatted(.relative(presentation: .named)))"
-    }
-
-    /// Top projects for the selected range, honoring the $⇄tokens unit toggle.
-    @ViewBuilder
-    private var topOffenders: some View {
-        let rows = store.breakdown(range: display.timeRange).byProject.prefix(5)
-        if !rows.isEmpty {
-            Divider()
-            HStack {
-                Text("Top projects").font(.caption.bold())
-                Spacer()
-                Text(display.timeRange.displayName).font(.caption2).foregroundStyle(.secondary)
-            }
-            ForEach(Array(rows), id: \.key) { r in
-                HStack {
-                    Text(r.key).lineLimit(1)
-                    Spacer()
-                    Text(DefaultPaths.formatValue(totals: r.totals, costUSD: r.costUSD,
-                                                  unit: display.unit))
-                        .foregroundStyle(.secondary).monospacedDigit()
-                }
-                .font(.callout)
-            }
-        }
-    }
-
-    private var provenanceLabel: String {
-        switch status.provenance {
-        case .live:      return "Live"
-        case .estimated: return "Estimated"
-        case .derived:   return "≈ cost"
-        case .billed:    return "Billed"
-        case .measured:  return "Measured"
-        }
     }
 
     private func windowName(_ kind: WindowKind) -> String {
@@ -129,9 +177,201 @@ struct PopoverView: View {
         case .month:    return "This month"
         }
     }
+}
 
-    private func percentText(_ p: Double?) -> String {
-        guard let p else { return "—" }
+/// One limit window rendered as a labelled progress gauge: name + reset on the
+/// top line, a coloured bar below. The percent is coloured and bold (the number
+/// you actually watch), and the whole row reads as one VoiceOver element with a
+/// non-colour word for its state ("High"/"Critical").
+struct LimitGaugeRow: View {
+    let name: String
+    let window: WindowStatus
+
+    private var fraction: Double { min(1, max(0, window.percent ?? 0)) }
+    private var color: Color { UsageColor.forPercent(window.percent) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(name).font(.system(size: 13, weight: .semibold))
+                Spacer(minLength: 0)
+                if let reset = window.resetsAt {
+                    Text(resetText(reset)).font(.system(size: 11)).foregroundStyle(.tertiary)
+                }
+                Text(percentText).font(.system(size: 13, weight: .bold))
+                    .monospacedDigit().foregroundStyle(color)
+            }
+            GaugeBar(fraction: fraction, color: color)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(name) limit")
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private var percentText: String {
+        guard let p = window.percent else { return "—" }
         return "\(Int((max(0, p) * 100).rounded()))%"
     }
+
+    private var accessibilityValue: String {
+        var v = "\(percentText), \(UsageColor.label(window.percent))"
+        if let reset = window.resetsAt { v += ", resets \(reset.formatted(.relative(presentation: .named)))" }
+        return v
+    }
+
+    private func resetText(_ date: Date) -> String {
+        "resets \(date.formatted(.relative(presentation: .named)))"
+    }
+}
+
+/// A flat, rounded 7pt limit bar: a faint track with a colour-filled portion.
+/// Replaces `ProgressView` so the fill radius, height and track tint match the
+/// refined popover exactly (green → amber → red carries the load).
+struct GaugeBar: View {
+    let fraction: Double
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.09))
+                Capsule().fill(color)
+                    .frame(width: max(0, geo.size.width * min(1, max(0, fraction))))
+            }
+        }
+        .frame(height: 7)
+    }
+}
+
+/// One "Top projects" row: a faint share bar behind the row (its slice of usage
+/// vs. the busiest project), the project name, its percent-of-total, and the
+/// value in the chosen unit. The bar makes relative spend scannable at a glance.
+struct ShareProjectRow: View {
+    let name: String
+    let value: String
+    /// Share of the grand total (0…1), shown as the percent column.
+    let share: Double
+    /// Width of the faint bar relative to the busiest project (0…1).
+    let barFraction: Double
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Text(name)
+                .font(.system(size: 12.5))
+                .lineLimit(1).truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(shareText)
+                .font(.system(size: 10.5)).foregroundStyle(.tertiary)
+                .monospacedDigit()
+                .frame(width: 34, alignment: .trailing)
+            Text(value)
+                .font(.system(size: 12.5, weight: .semibold))
+                .monospacedDigit()
+                .frame(width: 58, alignment: .trailing)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(alignment: .leading) {
+            GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(Color.primary.opacity(0.05))
+                    .frame(width: max(0, geo.size.width * min(1, max(0, barFraction))))
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(name): \(value), \(shareText) of usage")
+    }
+
+    private var shareText: String {
+        guard share > 0 else { return "0%" }
+        if share < 0.01 { return "<1%" }
+        return "\(Int((share * 100).rounded()))%"
+    }
+}
+
+/// The colour-dot + word that states whether numbers are live, estimated, etc.
+/// (spec §7 — provenance is always explicit). An orange dot flags estimates.
+///
+/// For live data it also states the sample's age when the endpoint is failing:
+/// a stale-but-served live reading shows "Live · 12m ago" and its dot ambers
+/// once past `staleAfter`, so a frozen number can never masquerade as current.
+struct ProvenanceBadge: View {
+    let provenance: Provenance
+    var liveAsOf: Date? = nil
+    /// A live sample older than this reads as stale (amber dot). One poll is
+    /// ~2 min; ~3 poll intervals of tolerance before we flag staleness.
+    private let staleAfter: TimeInterval = 6 * 60
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle().fill(dotColor).frame(width: 6, height: 6)
+            Text(text).font(.caption2)
+        }
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Data source: \(accessibilityText)")
+    }
+
+    /// Age of the live sample, only when it's old enough to be worth showing.
+    private var age: TimeInterval? {
+        guard provenance == .live, let liveAsOf else { return nil }
+        let seconds = Date().timeIntervalSince(liveAsOf)
+        return seconds >= 60 ? seconds : nil
+    }
+
+    private var isStale: Bool { (age ?? 0) >= staleAfter }
+
+    private var text: String {
+        switch provenance {
+        case .live:      return age.map { "Live · \(Self.relativeAge($0))" } ?? "Live"
+        case .estimated: return "Estimated"
+        case .derived:   return "≈ cost"
+        case .billed:    return "Billed"
+        case .measured:  return "Measured"
+        }
+    }
+
+    private var accessibilityText: String {
+        provenance == .live && isStale ? "\(text) (stale)" : text
+    }
+
+    private var dotColor: Color {
+        switch provenance {
+        case .live:            return isStale ? .orange : .green
+        case .billed:          return .green
+        case .estimated:       return .orange
+        case .measured, .derived: return .secondary
+        }
+    }
+
+    /// Compact "time ago": 5m / 3h / 2d.
+    static func relativeAge(_ seconds: TimeInterval) -> String {
+        let s = Int(seconds)
+        switch s {
+        case ..<3_600:  return "\(max(1, s / 60))m ago"
+        case ..<86_400: return "\(s / 3_600)h ago"
+        default:        return "\(s / 86_400)d ago"
+        }
+    }
+}
+
+#Preview("Limit gauges") {
+    VStack(alignment: .leading, spacing: 12) {
+        HStack {
+            Text("Max 20×").font(.headline)
+            Spacer()
+            ProvenanceBadge(provenance: .live,
+                            liveAsOf: Date(timeIntervalSinceNow: -12 * 60))
+        }
+        LimitGaugeRow(name: "5-hour", window: WindowStatus(
+            kind: .fiveHour, usedTokens: 38_000, capTokens: 100_000, percent: 0.38,
+            resetsAt: Date(timeIntervalSinceNow: 7_200), provenance: .live))
+        LimitGaugeRow(name: "Weekly", window: WindowStatus(
+            kind: .weekly, usedTokens: 710_000, capTokens: 1_000_000, percent: 0.71,
+            resetsAt: Date(timeIntervalSinceNow: 200_000), provenance: .live))
+        LimitGaugeRow(name: "This month", window: WindowStatus(
+            kind: .month, usedTokens: 980_000, capTokens: 1_000_000, percent: 0.98,
+            resetsAt: nil, provenance: .estimated))
+    }
+    .padding(14).frame(width: 300)
 }

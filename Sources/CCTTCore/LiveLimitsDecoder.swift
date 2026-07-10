@@ -18,16 +18,16 @@ public enum LiveLimitsDecoder {
 
         let five = obj.window(forAnyOf: ["five_hour", "fiveHour", "5h"])
         let week = obj.window(forAnyOf: ["seven_day", "sevenDay", "weekly", "7d"])
-        let credits = obj["credits"] as? [String: Any]
+        let credits = obj.credits()
 
         let live = LiveLimits(
             fiveHourPercent: five?.utilization,
             weeklyPercent: week?.utilization,
             fiveHourResetsAt: five?.resetsAt,
             weeklyResetsAt: week?.resetsAt,
-            creditBalanceMinorUnits: credits?.intForAnyOf(["balance_minor_units", "balanceMinorUnits", "balance"]),
-            creditUsedMinorUnits: credits?.intForAnyOf(["used_minor_units", "usedMinorUnits", "used"]),
-            currency: credits?["currency"] as? String
+            creditBalanceMinorUnits: credits.balanceMinorUnits,
+            creditUsedMinorUnits: credits.usedMinorUnits,
+            currency: credits.currency
         )
 
         // Nothing recognised → treat as "no live data" rather than an empty shell.
@@ -43,6 +43,13 @@ private struct DecodedWindow {
     var resetsAt: Date?
 }
 
+/// Extra-usage credit figures, normalised to the app's minor-unit (cents) model.
+private struct DecodedCredits {
+    var balanceMinorUnits: Int?
+    var usedMinorUnits: Int?
+    var currency: String?
+}
+
 private extension Dictionary where Key == String, Value == Any {
 
     /// Reads the first present window object under any of the given aliases.
@@ -52,6 +59,41 @@ private extension Dictionary where Key == String, Value == Any {
         let util = raw.doubleForAnyOf(["utilization", "used_pct", "usedPct", "percent"])
         return DecodedWindow(utilization: util.map(normalizeFraction),
                              resetsAt: raw.dateForAnyOf(["resets_at", "resetsAt", "reset"]))
+    }
+
+    /// Extra-usage credits. The live endpoint reports these under `extra_usage`
+    /// as *major-unit* amounts (`used_credits`, `monthly_limit`) alongside a
+    /// `decimal_places` and an `is_enabled` flag — distinct from the rest of
+    /// Claude's data, which names pre-scaled amounts `*_minor_units`. We surface
+    /// them only when `is_enabled` is true, so a disabled account shows no live
+    /// credit line rather than a misleading $0. Falls back to the pre-scaled
+    /// `credits` shape (spec / older responses) when `extra_usage` is absent.
+    func credits() -> DecodedCredits {
+        if let extra = self["extra_usage"] as? [String: Any] {
+            guard (extra["is_enabled"] as? NSNumber)?.boolValue == true else {
+                return DecodedCredits()
+            }
+            let used = extra.majorAmountAsMinorUnits("used_credits")
+            let limit = extra.majorAmountAsMinorUnits("monthly_limit")
+            // Balance shown is what's left of the cap; with no cap we only know spend.
+            let balance = (limit != nil && used != nil) ? limit! - used! : limit
+            return DecodedCredits(balanceMinorUnits: balance, usedMinorUnits: used,
+                                  currency: extra["currency"] as? String)
+        }
+        if let credits = self["credits"] as? [String: Any] {
+            return DecodedCredits(
+                balanceMinorUnits: credits.intForAnyOf(["balance_minor_units", "balanceMinorUnits", "balance"]),
+                usedMinorUnits: credits.intForAnyOf(["used_minor_units", "usedMinorUnits", "used"]),
+                currency: credits["currency"] as? String)
+        }
+        return DecodedCredits()
+    }
+
+    /// A major-unit money amount (e.g. dollars) → minor units (cents), matching
+    /// `MoneyFormat`'s ÷100 display convention.
+    func majorAmountAsMinorUnits(_ key: String) -> Int? {
+        guard let n = self[key] as? NSNumber else { return nil }
+        return Int((n.doubleValue * 100).rounded())
     }
 
     func doubleForAnyOf(_ keys: [String]) -> Double? {
@@ -73,9 +115,11 @@ private extension Dictionary where Key == String, Value == Any {
     }
 }
 
-/// A percentage may arrive as a 0–1 fraction or a 0–100 whole number; normalise
-/// to a fraction so `LimitEngine`/UI always see 0…1(+).
-private func normalizeFraction(_ v: Double) -> Double { v > 1 ? v / 100 : v }
+/// The endpoint reports `utilization` on a 0–100 percentage scale — confirmed
+/// against live responses (`five_hour: 7.0` = 7%, `seven_day: 1.0` = 1%).
+/// Normalise to a 0…1(+) fraction so `LimitEngine`/UI always see a fraction.
+/// (An earlier `v > 1 ? v/100 : v` guess wrongly read a real 1% weekly as 100%.)
+private func normalizeFraction(_ v: Double) -> Double { v / 100 }
 
 /// ISO-8601 parsing, with and without fractional seconds.
 private enum LiveLimitsDateParser {

@@ -1,7 +1,9 @@
 import Foundation
 
 /// One assistant message's token usage, extracted from a JSONL log line.
-public struct UsageEvent: Sendable, Equatable {
+/// `Codable` so it can be persisted to CCTT's durable event log (`EventStore`),
+/// which is what lets historical usage survive an app restart.
+public struct UsageEvent: Sendable, Equatable, Codable {
     public let timestamp: Date
     public let model: String
     public let inputTokens: Int

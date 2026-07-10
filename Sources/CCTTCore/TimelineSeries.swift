@@ -16,7 +16,13 @@ public struct TimeBucket: Sendable, Equatable {
 /// returns an empty series.
 public func timelineSeries(events: [UsageEvent], range: TimeRange, now: Date,
                            prices: PriceTable) -> [TimeBucket] {
-    let unique = deduplicated(events)
+    timelineSeries(deduped: deduplicated(events), range: range, now: now, prices: prices)
+}
+
+/// As `timelineSeries(events:…)` but for already-`deduplicated` events, so the
+/// detail window can share a single dedup pass across all its builders.
+public func timelineSeries(deduped unique: [UsageEvent], range: TimeRange, now: Date,
+                           prices: PriceTable) -> [TimeBucket] {
     let g = bucketSeconds(for: range)
 
     let lower: Date

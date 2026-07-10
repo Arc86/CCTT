@@ -33,7 +33,8 @@ public enum LimitEngine {
             return PlanStatus(kind: plan.kind, planLabel: plan.planLabel,
                               windows: [five, week], credits: creditsStatus,
                               costUSD: prices.costUSD(forByModel: snapshot.byModel),
-                              provenance: isLive ? .live : .estimated, generatedAt: now)
+                              provenance: isLive ? .live : .estimated,
+                              liveAsOf: isLive ? live?.observedAt : nil, generatedAt: now)
 
         case .api:
             let monthCost = prices.costUSD(forByModel: snapshot.monthByModel)

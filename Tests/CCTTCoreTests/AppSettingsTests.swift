@@ -13,6 +13,7 @@ struct AppSettingsTests {
         #expect(s.thresholds == AlertThresholds.default)
         #expect(s.projectsPathOverride == nil)
         #expect(s.hiddenTabs.isEmpty)
+        #expect(s.showPercentInMenuBar == true)   // icon + % shown by default
     }
 
     @Test func roundTripsThroughCodable() throws {
@@ -25,6 +26,7 @@ struct AppSettingsTests {
         s.projectsPathOverride = "/custom/projects"
         s.hiddenTabs = ["contextWindows"]
         s.currencyCode = "EUR"
+        s.showPercentInMenuBar = false
 
         let data = try JSONEncoder().encode(s)
         let restored = try JSONDecoder().decode(AppSettings.self, from: data)
@@ -39,6 +41,7 @@ struct AppSettingsTests {
         #expect(s.liveLimitsEnabled == true)
         #expect(s.alertsEnabled == false)
         #expect(s.thresholds == AlertThresholds.default)
+        #expect(s.showPercentInMenuBar == true)   // absent key → default true
     }
 }
 

@@ -8,6 +8,7 @@ let package = Package(
         .executableTarget(
             name: "CCTTApp",
             dependencies: ["CCTTCore"],
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .target(

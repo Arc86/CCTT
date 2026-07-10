@@ -47,14 +47,19 @@ public struct PlanStatus: Sendable, Equatable {
     public let credits: CreditsStatus?
     public let costUSD: Double?        // derived "≈ cost"; nil when N/A
     public let provenance: Provenance  // headline treatment (.live/.estimated/.derived)
+    /// When the live sample behind a `.live` status was actually fetched. `nil`
+    /// unless this status is live-sourced. The UI compares it to "now" to render
+    /// the sample's age and flag a stale-but-served live reading.
+    public let liveAsOf: Date?
     public let generatedAt: Date
 
     public init(kind: PlanKind, planLabel: String, windows: [WindowStatus],
                 credits: CreditsStatus?, costUSD: Double?, provenance: Provenance,
-                generatedAt: Date) {
+                liveAsOf: Date? = nil, generatedAt: Date) {
         self.kind = kind; self.planLabel = planLabel; self.windows = windows
         self.credits = credits; self.costUSD = costUSD
-        self.provenance = provenance; self.generatedAt = generatedAt
+        self.provenance = provenance; self.liveAsOf = liveAsOf
+        self.generatedAt = generatedAt
     }
 
     /// The most-constraining window percentage (spec: `max(5h%, weekly%)`).

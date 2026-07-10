@@ -6,6 +6,7 @@ public enum JSONLParser {
 
     public enum ParseOutcome: Equatable {
         case event(UsageEvent)
+        case sessionTitle(sessionId: String, title: String)  // Claude Code's `ai-title` line
         case skipped     // valid JSON, but not an assistant-with-usage line
         case malformed   // could not decode as JSON
     }
@@ -45,6 +46,14 @@ public enum JSONLParser {
         } catch {
             return .malformed
         }
+        // Claude Code writes a generated, human-readable session title on a dedicated
+        // `ai-title` line (keyed only by sessionId — no cwd). Surface it so the UI can
+        // show it in place of the raw session UUID.
+        if raw.type == "ai-title", let sid = raw.sessionId,
+           let title = raw.aiTitle, !title.isEmpty {
+            return .sessionTitle(sessionId: sid, title: title)
+        }
+
         guard raw.type == "assistant",
               let msg = raw.message,
               let usage = msg.usage,
@@ -90,6 +99,7 @@ public enum JSONLParser {
         let requestId: String?
         let version: String?
         let gitBranch: String?
+        let aiTitle: String?
         let message: RawMessage?
     }
     private struct RawMessage: Decodable {

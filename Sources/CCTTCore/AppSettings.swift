@@ -23,6 +23,9 @@ public struct AppSettings: Sendable, Equatable, Codable {
     public var hiddenTabs: Set<String>
     /// Currency code for money display.
     public var currencyCode: String
+    /// Show the "% used" text next to the gauge glyph in the menu bar. When
+    /// off, only the icon shows (compact). On by default.
+    public var showPercentInMenuBar: Bool
 
     public init(liveLimitsEnabled: Bool = false,
                 manualPlanKind: PlanKind? = nil,
@@ -33,7 +36,8 @@ public struct AppSettings: Sendable, Equatable, Codable {
                 thresholds: AlertThresholds = .default,
                 projectsPathOverride: String? = nil,
                 hiddenTabs: Set<String> = [],
-                currencyCode: String = "USD") {
+                currencyCode: String = "USD",
+                showPercentInMenuBar: Bool = true) {
         self.liveLimitsEnabled = liveLimitsEnabled
         self.manualPlanKind = manualPlanKind
         self.apiMonthlyBudgetUSD = apiMonthlyBudgetUSD
@@ -44,6 +48,7 @@ public struct AppSettings: Sendable, Equatable, Codable {
         self.projectsPathOverride = projectsPathOverride
         self.hiddenTabs = hiddenTabs
         self.currencyCode = currencyCode
+        self.showPercentInMenuBar = showPercentInMenuBar
     }
 
     // Lenient decoding: every field falls back to its default when absent.
@@ -60,6 +65,7 @@ public struct AppSettings: Sendable, Equatable, Codable {
         projectsPathOverride = try c.decodeIfPresent(String.self, forKey: .projectsPathOverride) ?? d.projectsPathOverride
         hiddenTabs = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenTabs) ?? d.hiddenTabs
         currencyCode = try c.decodeIfPresent(String.self, forKey: .currencyCode) ?? d.currencyCode
+        showPercentInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showPercentInMenuBar) ?? d.showPercentInMenuBar
     }
 }
 

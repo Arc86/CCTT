@@ -1,19 +1,27 @@
 import Foundation
 
-/// Keep one event per `dedupKey`; events lacking a key are always kept.
-/// Shared by `aggregate` and the on-demand detail-window builders so every
-/// consumer counts each `(requestId, messageId)` exactly once.
+/// Keep one event per `dedupKey`, choosing the **last** occurrence; events
+/// lacking a key are always kept. Shared by `aggregate` and the on-demand
+/// detail-window builders so every consumer counts each `(requestId, messageId)`
+/// exactly once.
+///
+/// Last-wins matters: Claude Code emits a message across several JSONL lines as it
+/// streams, all sharing one `message.id`. Earlier lines carry a placeholder usage
+/// (often `output_tokens == 1`); only the final line has the true tally. Verified
+/// against real logs: ~18k of 27k messages repeat, ~4k with differing usage, and
+/// in every case only `output_tokens` grows. Keeping the first line would
+/// systematically undercount output tokens (and derived cost).
 func deduplicated(_ events: [UsageEvent]) -> [UsageEvent] {
-    var seen = Set<String>()
-    var unique: [UsageEvent] = []
-    unique.reserveCapacity(events.count)
+    var latestByKey: [String: UsageEvent] = [:]
+    var keyOrder: [String] = []
+    var keyless: [UsageEvent] = []
     for e in events {
-        if let key = e.dedupKey {
-            if seen.insert(key).inserted { unique.append(e) }
-        } else {
-            unique.append(e)
-        }
+        guard let key = e.dedupKey else { keyless.append(e); continue }
+        if latestByKey[key] == nil { keyOrder.append(key) }
+        latestByKey[key] = e   // last occurrence wins
     }
+    var unique = keyOrder.map { latestByKey[$0]! }
+    unique.append(contentsOf: keyless)
     return unique
 }
 

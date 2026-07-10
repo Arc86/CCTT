@@ -34,6 +34,27 @@ private func assistantLine(_ model: String, out: Int, req: String, msg: String) 
     """
 }
 
+private func titleLine(session: String, title: String) -> String {
+    #"{"type":"ai-title","sessionId":"\#(session)","aiTitle":"\#(title)"}"#
+}
+
+@Test func collectsSessionTitlesAlongsideEvents() {
+    let h = Harness()
+    h.write("s.jsonl",
+        titleLine(session: "s1", title: "First title") + "\n" +
+        assistantLine("claude-opus-4-8", out: 10, req: "r1", msg: "m1") + "\n" +
+        titleLine(session: "s1", title: "Refined title") + "\n")   // later wins
+    let result = h.ingestor().scan()
+    #expect(result.events.count == 1)
+    #expect(result.titles["s1"] == "Refined title")
+}
+
+@Test func titlesAreEmptyWhenNoAiTitleLines() {
+    let h = Harness()
+    h.write("s.jsonl", assistantLine("m", out: 10, req: "r1", msg: "m1") + "\n")
+    #expect(h.ingestor().scan().titles.isEmpty)
+}
+
 @Test func parsesAllEventsOnFirstScan() {
     let h = Harness()
     h.write("s.jsonl",

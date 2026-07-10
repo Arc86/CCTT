@@ -70,6 +70,20 @@ private let now = Date(timeIntervalSince1970: 1_783_000_000)
     #expect(s.compactionCount == 1)
 }
 
+@Test func contextSummariesJoinTitlesBySessionId() {
+    let events = [
+        UsageEvent.fixture(timestamp: now, input: 10_000, sessionId: "s1",
+                           requestId: "r1", messageId: "m1"),
+        UsageEvent.fixture(timestamp: now, input: 10_000, sessionId: "s2",
+                           requestId: "r2", messageId: "m2"),
+    ]
+    let sums = contextSummaries(events: events, range: .all, now: now,
+                                titles: ["s1": "Context window work"])
+    let byId = Dictionary(uniqueKeysWithValues: sums.map { ($0.sessionId, $0) })
+    #expect(byId["s1"]?.title == "Context window work")
+    #expect(byId["s2"]?.title == nil)
+}
+
 @Test func contextSummariesRespectRange() {
     let events = [
         UsageEvent.fixture(timestamp: now.addingTimeInterval(-60), input: 30_000,

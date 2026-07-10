@@ -20,6 +20,18 @@ private let now = Date(timeIntervalSince1970: 1_783_000_000)
     #expect(s.lastActivity == now.addingTimeInterval(-60))
 }
 
+@Test func sessionSummariesJoinTitlesBySessionId() {
+    let events = [
+        UsageEvent.fixture(timestamp: now, sessionId: "s1", requestId: "r1", messageId: "m1"),
+        UsageEvent.fixture(timestamp: now, sessionId: "s2", requestId: "r2", messageId: "m2"),
+    ]
+    let sums = sessionSummaries(events: events, range: .all, now: now, prices: .bundled,
+                                titles: ["s1": "Refactor detail view"])
+    let byId = Dictionary(uniqueKeysWithValues: sums.map { ($0.sessionId, $0) })
+    #expect(byId["s1"]?.title == "Refactor detail view")
+    #expect(byId["s2"]?.title == nil)   // no entry → nil, UI falls back to the ID
+}
+
 @Test func sessionSummariesSortByMostRecentFirst() {
     let events = [
         UsageEvent.fixture(timestamp: now.addingTimeInterval(-10_000), sessionId: "old",

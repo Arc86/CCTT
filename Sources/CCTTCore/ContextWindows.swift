@@ -25,7 +25,12 @@ private let compactionFloor = 10_000
 /// The chosen session's context-size series, ordered by time, with compaction
 /// points flagged. Events are de-duplicated first.
 public func contextSeries(events: [UsageEvent], sessionId: String) -> [ContextPoint] {
-    let ordered = deduplicated(events)
+    contextSeries(deduped: deduplicated(events), sessionId: sessionId)
+}
+
+/// As `contextSeries(events:…)` but for already-`deduplicated` events.
+public func contextSeries(deduped events: [UsageEvent], sessionId: String) -> [ContextPoint] {
+    let ordered = events
         .filter { $0.sessionId == sessionId }
         .sorted { $0.timestamp < $1.timestamp }
 
@@ -45,29 +50,41 @@ public func contextSeries(events: [UsageEvent], sessionId: String) -> [ContextPo
 public struct ContextSessionSummary: Sendable, Equatable, Identifiable {
     public var id: String { sessionId }
     public let sessionId: String
+    /// Claude Code's generated title for the session, when known; `nil` falls back to
+    /// the session ID in the UI.
+    public let title: String?
     public let model: String
     public let ceiling: Int
     public let peakContext: Int
     public let avgContext: Double
     public let peakPercentOfCeiling: Double
     public let compactionCount: Int
-    public init(sessionId: String, model: String, ceiling: Int, peakContext: Int,
-                avgContext: Double, peakPercentOfCeiling: Double, compactionCount: Int) {
-        self.sessionId = sessionId; self.model = model; self.ceiling = ceiling
+    public init(sessionId: String, title: String? = nil, model: String, ceiling: Int,
+                peakContext: Int, avgContext: Double, peakPercentOfCeiling: Double,
+                compactionCount: Int) {
+        self.sessionId = sessionId; self.title = title; self.model = model; self.ceiling = ceiling
         self.peakContext = peakContext; self.avgContext = avgContext
         self.peakPercentOfCeiling = peakPercentOfCeiling; self.compactionCount = compactionCount
     }
 }
 
 /// One summary per session active in `range`, sorted by peak context descending.
-public func contextSummaries(events: [UsageEvent], range: TimeRange,
-                             now: Date) -> [ContextSessionSummary] {
+/// `titles` maps `sessionId → title` (from Claude Code `ai-title` lines).
+public func contextSummaries(events: [UsageEvent], range: TimeRange, now: Date,
+                             titles: [String: String] = [:]) -> [ContextSessionSummary] {
+    contextSummaries(deduped: deduplicated(events), range: range, now: now, titles: titles)
+}
+
+/// As `contextSummaries(events:…)` but for already-`deduplicated` events, so the
+/// detail window can share a single dedup pass across all its builders.
+public func contextSummaries(deduped events: [UsageEvent], range: TimeRange, now: Date,
+                             titles: [String: String] = [:]) -> [ContextSessionSummary] {
     let interval = range.interval(now: now)
-    let inRange = deduplicated(events).filter { interval?.contains($0.timestamp) ?? true }
+    let inRange = events.filter { interval?.contains($0.timestamp) ?? true }
     let bySession = Dictionary(grouping: inRange, by: \.sessionId)
 
     return bySession.map { id, evs -> ContextSessionSummary in
-        let series = contextSeries(events: evs, sessionId: id)
+        let series = contextSeries(deduped: evs, sessionId: id)
         let sizes = series.map(\.contextTokens)
         let peak = sizes.max() ?? 0
         let avg = sizes.isEmpty ? 0 : Double(sizes.reduce(0, +)) / Double(sizes.count)
@@ -75,7 +92,8 @@ public func contextSummaries(events: [UsageEvent], range: TimeRange,
         let model = evs.max { $0.timestamp < $1.timestamp }?.model ?? ""
         let ceiling = contextCeiling(model: model)
         return ContextSessionSummary(
-            sessionId: id, model: model, ceiling: ceiling, peakContext: peak, avgContext: avg,
+            sessionId: id, title: titles[id], model: model, ceiling: ceiling, peakContext: peak,
+            avgContext: avg,
             peakPercentOfCeiling: ceiling > 0 ? Double(peak) / Double(ceiling) : 0,
             compactionCount: series.filter(\.isCompaction).count)
     }

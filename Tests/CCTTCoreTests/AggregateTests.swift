@@ -27,6 +27,18 @@ private let fixedNow = Date(timeIntervalSince1970: 1_783_000_000)
     #expect(snap.overall.output == 30)
 }
 
+@Test func dedupKeepsFinalUsageTallyNotStreamingPlaceholder() {
+    // Claude Code streams a message across lines sharing one id: the first carries
+    // a placeholder (output 1), the last the true tally. Last must win.
+    let events = [
+        UsageEvent.fixture(output: 1, requestId: "r1", messageId: "m1"),    // placeholder
+        UsageEvent.fixture(output: 136, requestId: "r1", messageId: "m1"),  // final tally
+    ]
+    let snap = aggregate(events: events, parseErrors: 0, now: fixedNow)
+    #expect(snap.overall.eventCount == 1)
+    #expect(snap.overall.output == 136)   // not 1
+}
+
 @Test func nilKeyEventsAreAlwaysCounted() {
     let events = [
         UsageEvent.fixture(output: 10, requestId: nil, messageId: nil),
