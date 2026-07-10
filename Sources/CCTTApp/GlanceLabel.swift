@@ -10,6 +10,7 @@ struct PopoverView: View {
     @Environment(PlanStore.self) private var planStore
     @Environment(DisplayState.self) private var display
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.softwareUpdater) private var updater
 
     private var status: PlanStatus { planStore.status }
     private var snapshot: UsageSnapshot { store.snapshot }
@@ -150,6 +151,13 @@ struct PopoverView: View {
             .keyboardShortcut(",", modifiers: .command)
             .help("Settings (⌘,)")
             .accessibilityLabel("Settings")
+            Button("Check for Updates…") {
+                NSApp.activate(ignoringOtherApps: true)
+                updater.checkForUpdates()
+            }
+            .buttonStyle(.borderless)
+            .disabled(!updater.canCheckForUpdates)
+            .help("Check for Updates")
             Button("Quit") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")
         }

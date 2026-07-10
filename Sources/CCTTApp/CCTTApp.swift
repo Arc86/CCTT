@@ -31,6 +31,10 @@ struct CCTTApp: App {
     @State private var display = DisplayState()
     @State private var settingsStore = SettingsStore()
     @State private var notifications = NotificationManager()
+    // Live auto-updater only when running as a real `.app`; dev runs stay inert.
+    @State private var updater: any SoftwareUpdating =
+        AppBundling.isBundled(Bundle.main.bundleURL) ? SparkleUpdater() : DisabledUpdater()
+    private let loginItem: any LoginItemControlling = SystemLoginItem()
 
     var body: some Scene {
         MenuBarExtra {
@@ -39,6 +43,7 @@ struct CCTTApp: App {
                 .environment(planStore)
                 .environment(display)
                 .environment(settingsStore)
+                .environment(\.softwareUpdater, updater)
         } label: {
             MenuBarLabel()
                 .environment(store)
@@ -78,6 +83,8 @@ struct CCTTApp: App {
                 .environment(planStore)
                 .environment(display)
                 .environment(notifications)
+                .environment(\.softwareUpdater, updater)
+                .environment(\.loginItem, loginItem)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
