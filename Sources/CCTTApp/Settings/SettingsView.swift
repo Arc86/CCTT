@@ -71,7 +71,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 /// grouped `Form`. All bindings read the shared stores.
 struct SettingsView: View {
     @Environment(DisplayState.self) private var display
-    @State private var selection: SettingsSection = .plan
+    // General is the first sidebar item; landing there matches the macOS idiom.
+    @State private var selection: SettingsSection = .general
 
     var body: some View {
         HStack(spacing: 0) {
@@ -137,8 +138,9 @@ struct SettingsView: View {
         }
     }
 
-    /// App name + version for the sidebar footer. Falls back to just the name when
-    /// run unbundled (e.g. `swift run`), where the Info.plist version is absent.
+    /// App name + version for the sidebar footer. When run unbundled (e.g.
+    /// `swift run`) the Info.plist version is absent, so `AppVersion` falls back
+    /// to the compiled-in `coreVersion`.
     private var versionLabel: String {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
         return "CCTT v\(AppVersion.string(bundleShort: v))"

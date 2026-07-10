@@ -7,6 +7,10 @@ import Sparkle
 /// use `DisabledUpdater` instead.
 @MainActor
 @Observable
+// The `@MainActor` on the conformance is load-bearing, not redundant: it makes
+// this an isolated conformance so `any SoftwareUpdating` formed from a
+// `SparkleUpdater` is usable from MainActor contexts, while `DisabledUpdater`
+// keeps a plain non-isolated conformance. Removing it breaks the build.
 final class SparkleUpdater: @MainActor SoftwareUpdating {
     private let controller: SPUStandardUpdaterController
 
