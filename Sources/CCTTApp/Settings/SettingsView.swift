@@ -21,11 +21,12 @@ enum Brand {
 
 /// One selectable pane in the redesigned Settings window's sidebar.
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case plan, live, alerts, display, data, about
+    case general, plan, live, alerts, display, data, about
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .general: return "General"
         case .plan:    return "Plan"
         case .live:    return "Live"
         case .alerts:  return "Alerts"
@@ -37,6 +38,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
+        case .general: return "gearshape.fill"
         case .plan:    return "gauge.with.dots.needle.67percent"
         case .live:    return "dot.radiowaves.left.and.right"
         case .alerts:  return "bell.fill"
@@ -50,6 +52,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     /// coloured rounded-rect glyphs.
     var tint: Color {
         switch self {
+        case .general: return Color(red: 0.42, green: 0.45, blue: 0.50) // slate  #6B7280
         case .plan:    return Color(red: 0.37, green: 0.36, blue: 0.90) // indigo #5E5CE6
         case .live:    return Color(red: 0.19, green: 0.69, blue: 0.30) // green  #30B14D
         case .alerts:  return Color(red: 1.00, green: 0.27, blue: 0.23) // red    #FF453A
@@ -160,6 +163,7 @@ struct SettingsView: View {
 
     @ViewBuilder private var detailPane: some View {
         switch selection {
+        case .general: GeneralPane()
         case .plan:    PlanSettingsPane()
         case .live:    LiveSettingsPane()
         case .alerts:  AlertSettingsPane()
