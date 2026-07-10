@@ -138,7 +138,7 @@ struct SettingsView: View {
     /// run unbundled (e.g. `swift run`), where the Info.plist version is absent.
     private var versionLabel: String {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-        return v.map { "CCTT v\($0)" } ?? "CCTT"
+        return "CCTT v\(AppVersion.string(bundleShort: v))"
     }
 
     // MARK: Detail
@@ -228,7 +228,7 @@ private struct AboutPane: View {
 
     private var versionLabel: String {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-        return v.map { "Version \($0)" } ?? "Development build"
+        return "Version \(AppVersion.string(bundleShort: v))"
     }
 }
 
