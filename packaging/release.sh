@@ -37,9 +37,22 @@ SIG_LINE="$("$SIGN_UPDATE" "$ZIP")"   # prints: sparkle:edSignature="…" length
 PUBDATE="$(date -u +'%a, %d %b %Y %H:%M:%S +0000')"
 DL="https://github.com/Arc86/CCTT/releases/download/v$VERSION/CCTT-$VERSION.zip"
 
+# Inline release notes (shown in Sparkle's update dialog) from an optional
+# per-version HTML file. Without it, Sparkle shows the bare "new version" dialog.
+NOTES_FILE="$ROOT/packaging/release-notes/$VERSION.html"
+DESC=""
+if [ -f "$NOTES_FILE" ]; then
+  DESC="
+      <description><![CDATA[
+$(cat "$NOTES_FILE")
+      ]]></description>"
+else
+  echo "⚠ No release notes at packaging/release-notes/$VERSION.html — dialog will have no notes."
+fi
+
 echo "▶ Appending appcast entry…"
 ITEM="    <item>
-      <title>Version $VERSION</title>
+      <title>Version $VERSION</title>$DESC
       <sparkle:version>$VERSION</sparkle:version>
       <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>

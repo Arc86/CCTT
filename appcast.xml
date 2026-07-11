@@ -16,6 +16,15 @@
     </item>
     <item>
       <title>Version 1.0.1</title>
+      <description><![CDATA[
+<h2>CCTT 1.0.1</h2>
+<ul>
+  <li><b>A real app icon.</b> CCTT now has a proper rounded macOS icon in the Dock, Finder, and throughout the app.</li>
+  <li><b>The current logo everywhere.</b> Onboarding, Settings, and the About page now show the up-to-date CCTT logo instead of older placeholder art.</li>
+  <li><b>Keychain prompt fixes.</b> The access prompt now appears the moment you enable live limits (instead of a couple of minutes later), and CCTT caches the token so it no longer re-prompts every few minutes. Tip: choose <b>Always Allow</b> to avoid future prompts.</li>
+  <li><b>Renamed to CCTT.app.</b> Fresh downloads install as <code>CCTT.app</code>; existing installs keep their current name and update in place.</li>
+</ul>
+      ]]></description>
       <sparkle:version>1.0.1</sparkle:version>
       <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
