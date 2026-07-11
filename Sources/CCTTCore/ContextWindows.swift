@@ -1,9 +1,39 @@
 import Foundation
 
-/// The context-window ceiling (in tokens) for a model id: 1M for `[1m]` models,
-/// otherwise the standard 200K.
+/// The context-window ceiling (in tokens) for a model id.
+///
+/// Claude Code strips the `[1m]` beta tag from the `message.model` it logs, so the
+/// ceiling can't be read off that tag alone — it's derived from the model family's
+/// documented maximum context window. Opus 4.6+, Sonnet 4.6/5, and Fable/Mythos 5
+/// ship the 1M window; Haiku and older Opus/Sonnet generations cap at 200K.
 public func contextCeiling(model: String) -> Int {
-    model.contains("[1m]") ? 1_000_000 : 200_000
+    supportsMillionTokenContext(model) ? 1_000_000 : 200_000
+}
+
+/// Whether `model`'s family supports the 1M-token context window.
+func supportsMillionTokenContext(_ model: String) -> Bool {
+    let m = model.lowercased()
+
+    // Explicit 1M beta tag (e.g. "claude-opus-4-8[1m]") is authoritative when present.
+    if m.contains("[1m]") { return true }
+
+    // Haiku and older Opus/Sonnet generations are 200K. Match these before the broad
+    // family fallbacks so e.g. "opus-4-5" isn't caught by the bare-"opus" alias.
+    if m.contains("haiku") { return false }
+    let only200K = ["opus-4-5", "opus-4-1", "opus-4-0", "opus-4-2025",
+                    "3-opus", "sonnet-4-5", "sonnet-4-0", "sonnet-4-2025",
+                    "3-7-sonnet", "3-5-sonnet", "3-sonnet"]
+    if only200K.contains(where: m.contains) { return false }
+
+    // Model families whose current members all ship the 1M window.
+    let million = ["opus-4-6", "opus-4-7", "opus-4-8",
+                   "sonnet-4-6", "sonnet-5", "fable-5", "mythos"]
+    if million.contains(where: m.contains) { return true }
+
+    // Bare aliases resolve to the latest model, which is 1M for opus/sonnet.
+    if m == "opus" || m == "sonnet" { return true }
+
+    return false
 }
 
 /// One point in a session's context-size-over-time series.

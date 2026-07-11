@@ -4,10 +4,27 @@ import Foundation
 
 private let now = Date(timeIntervalSince1970: 1_783_000_000)
 
-@Test func ceilingDetectsOneMillionModels() {
+@Test func ceilingReflectsModelContextWindow() {
+    // 1M-context models. Claude Code strips the `[1m]` tag from the logged model
+    // id, so the ceiling is derived from the model family, not that tag alone.
     #expect(contextCeiling(model: "claude-opus-4-8[1m]") == 1_000_000)
-    #expect(contextCeiling(model: "claude-opus-4-8") == 200_000)
-    #expect(contextCeiling(model: "claude-sonnet-5") == 200_000)
+    #expect(contextCeiling(model: "claude-opus-4-8") == 1_000_000)
+    #expect(contextCeiling(model: "claude-opus-4-7") == 1_000_000)
+    #expect(contextCeiling(model: "claude-opus-4-6") == 1_000_000)
+    #expect(contextCeiling(model: "claude-sonnet-4-6") == 1_000_000)
+    #expect(contextCeiling(model: "claude-sonnet-5") == 1_000_000)
+    #expect(contextCeiling(model: "claude-fable-5") == 1_000_000)
+    #expect(contextCeiling(model: "sonnet") == 1_000_000)
+    #expect(contextCeiling(model: "opus") == 1_000_000)
+
+    // 200K-context models: Haiku, and older Opus/Sonnet generations.
+    #expect(contextCeiling(model: "claude-haiku-4-5-20251001") == 200_000)
+    #expect(contextCeiling(model: "haiku") == 200_000)
+    #expect(contextCeiling(model: "claude-opus-4-5-20251101") == 200_000)
+    #expect(contextCeiling(model: "claude-opus-4-1-20250805") == 200_000)
+    #expect(contextCeiling(model: "claude-sonnet-4-5-20250929") == 200_000)
+    #expect(contextCeiling(model: "claude-opus-4-20250514") == 200_000)
+    #expect(contextCeiling(model: "<synthetic>") == 200_000)
 }
 
 @Test func contextSeriesIsOrderedAndSessionScoped() {
@@ -65,8 +82,8 @@ private let now = Date(timeIntervalSince1970: 1_783_000_000)
     let s = sums[0]
     #expect(s.peakContext == 100_000)
     #expect(abs(s.avgContext - 60_000) < 1e-6)
-    #expect(s.ceiling == 200_000)
-    #expect(abs(s.peakPercentOfCeiling - 0.5) < 1e-6)
+    #expect(s.ceiling == 1_000_000)  // Opus 4.8 supports the 1M window
+    #expect(abs(s.peakPercentOfCeiling - 0.1) < 1e-6)
     #expect(s.compactionCount == 1)
 }
 
