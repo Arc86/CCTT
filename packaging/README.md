@@ -22,7 +22,7 @@ export CCTT_ED_PUBKEY="<public key>"
 packaging/package_app.sh <version>
 packaging/release.sh <version>
 gh release create v<version> build/CCTTApp-<version>.zip --title "CCTT v<version>" --notes "…"
-git add packaging/appcast.xml && git commit -m "release: v<version>" && git push
+git add appcast.xml && git commit -m "release: v<version>" && git push
 ```
 The feed lives at `https://raw.githubusercontent.com/Arc86/CCTT/main/appcast.xml`;
 enclosure zips are GitHub Release assets.

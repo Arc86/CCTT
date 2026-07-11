@@ -47,7 +47,7 @@ ITEM="    <item>
       <enclosure url=\"$DL\" $SIG_LINE type=\"application/octet-stream\" />
     </item>"
 # Insert before the closing </channel>
-python3 - "$ROOT/packaging/appcast.xml" "$ITEM" "$VERSION" <<'PY'
+python3 - "$ROOT/appcast.xml" "$ITEM" "$VERSION" <<'PY'
 import sys
 path, item, version = sys.argv[1], sys.argv[2], sys.argv[3]
 xml = open(path).read()
@@ -62,4 +62,4 @@ PY
 
 echo "✅ Release prepared. Next:"
 echo "   gh release create v$VERSION \"$ZIP\" --title \"CCTT v$VERSION\" --notes \"…\""
-echo "   git add packaging/appcast.xml && git commit -m \"release: v$VERSION\" && git push"
+echo "   git add appcast.xml && git commit -m \"release: v$VERSION\" && git push"
