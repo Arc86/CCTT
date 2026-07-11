@@ -4,7 +4,7 @@ import Testing
 
 @Suite struct AppBundlingTests {
     @Test func recognizesDotAppBundle() {
-        let url = URL(fileURLWithPath: "/Applications/CCTTApp.app")
+        let url = URL(fileURLWithPath: "/Applications/CCTT.app")
         #expect(AppBundling.isBundled(url) == true)
     }
 

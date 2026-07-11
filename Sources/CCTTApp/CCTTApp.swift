@@ -22,8 +22,13 @@ struct CCTTApp: App {
     @State private var planStore = PlanStore(
         configURL: DefaultPaths.configURL,
         provider: GatedLiveLimitProvider(
-            wrapping: StickyLiveLimitProvider(wrapping: NetworkLiveLimitProvider(),
-                                              cacheURL: DefaultPaths.liveLimitsCacheURL),
+            wrapping: StickyLiveLimitProvider(
+                wrapping: NetworkLiveLimitProvider(
+                    // Cache the OAuth token in-process so the Keychain is read only
+                    // when the token nears expiry, not on every 120s poll — that
+                    // repeated read is what re-prompted the user "from time to time".
+                    credentials: CachingCredentialsSource(wrapping: KeychainCredentialsSource())),
+                cacheURL: DefaultPaths.liveLimitsCacheURL),
             isEnabled: { AppSettingsStorage.load().liveLimitsEnabled }),
         settingsProvider: { AppSettingsStorage.load() },
         clock: { Date() }
@@ -66,6 +71,8 @@ struct CCTTApp: App {
         Window("Welcome to CCTT", id: "onboarding") {
             OnboardingView()
                 .environment(settingsStore)
+                .environment(store)
+                .environment(planStore)
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
@@ -79,6 +86,7 @@ struct CCTTApp: App {
         Window("Settings", id: "settings") {
             SettingsView()
                 .environment(settingsStore)
+                .environment(store)
                 .environment(planStore)
                 .environment(display)
                 .environment(notifications)
@@ -146,10 +154,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         // No Dock icon as an accessory, but the Settings window promotes the app
-        // to `.regular`, where ⌘-Tab and the Dock show this icon.
-        if let url = Bundle.module.url(forResource: "CCTTLogo", withExtension: "png"),
+        // to `.regular`, where ⌘-Tab and the Dock show this icon. Use the
+        // pre-rounded squircle tile (macOS doesn't round Dock icons for us) so it
+        // matches the bundle's AppIcon.icns instead of a flat square.
+        if let url = Bundle.module.url(forResource: "AppIcon-1024", withExtension: "png"),
            let icon = NSImage(contentsOf: url) {
             NSApp.applicationIconImage = icon
         }
+    }
+}
+
+/// Fire an immediate live-limit refresh the instant the user opts in, so the
+/// Keychain access prompt appears in direct response to their click instead of
+/// up to ~120s later on the next background poll tick (the reason first-launch
+/// opt-in looked like it did nothing). Bringing the app forward makes the modal
+/// prompt surface even though CCTT is an `LSUIElement` accessory.
+@MainActor
+enum LiveLimitsActivation {
+    static func kick(_ planStore: PlanStore, _ usage: UsageStore) {
+        NSApp.activate(ignoringOtherApps: true)
+        Task { await planStore.refresh(snapshot: usage.snapshot) }
     }
 }

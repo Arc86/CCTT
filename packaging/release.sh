@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Notarize, staple, zip, EdDSA-sign, and append an appcast entry.
 #   packaging/release.sh <version>
-# Prereqs: build/CCTTApp.app exists (run package_app.sh first);
+# Prereqs: build/CCTT.app exists (run package_app.sh first);
 #          notarytool keychain profile "CCTT-notary"; Sparkle sign_update on PATH
 #          or discoverable in .build artifacts.
 set -euo pipefail
@@ -9,8 +9,8 @@ set -euo pipefail
 VERSION="${1:?usage: release.sh <version>}"
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-APP="$ROOT/build/CCTTApp.app"
-ZIP="$ROOT/build/CCTTApp-$VERSION.zip"
+APP="$ROOT/build/CCTT.app"
+ZIP="$ROOT/build/CCTT-$VERSION.zip"
 [ -d "$APP" ] || { echo "Missing $APP — run package_app.sh $VERSION first"; exit 1; }
 
 echo "▶ Notarizing…"
@@ -35,7 +35,7 @@ SIGN_UPDATE="$(find "$ROOT/.build" -name 'sign_update' -type f | head -1)"
 [ -n "$SIGN_UPDATE" ] || { echo "sign_update tool not found in .build"; exit 1; }
 SIG_LINE="$("$SIGN_UPDATE" "$ZIP")"   # prints: sparkle:edSignature="…" length="…"
 PUBDATE="$(date -u +'%a, %d %b %Y %H:%M:%S +0000')"
-DL="https://github.com/Arc86/CCTT/releases/download/v$VERSION/CCTTApp-$VERSION.zip"
+DL="https://github.com/Arc86/CCTT/releases/download/v$VERSION/CCTT-$VERSION.zip"
 
 echo "▶ Appending appcast entry…"
 ITEM="    <item>

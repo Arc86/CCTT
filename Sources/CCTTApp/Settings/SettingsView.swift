@@ -364,6 +364,7 @@ private struct PlanSettingsPane: View {
 
 private struct LiveSettingsPane: View {
     @Environment(SettingsStore.self) private var settingsStore
+    @Environment(UsageStore.self) private var usage
     @Environment(PlanStore.self) private var planStore
 
     var body: some View {
@@ -371,6 +372,10 @@ private struct LiveSettingsPane: View {
         Form {
             Section {
                 Toggle("Fetch live limits", isOn: $store.settings.liveLimitsEnabled)
+                    .onChange(of: store.settings.liveLimitsEnabled) { _, enabled in
+                        // Same immediate-prompt behavior as onboarding when turned on here.
+                        if enabled { LiveLimitsActivation.kick(planStore, usage) }
+                    }
                 Text("Uses Claude Code's existing sign-in (read from the Keychain) to "
                      + "fetch real limit percentages and reset times. The first fetch "
                      + "prompts for Keychain access. CCTT works fully on estimates if you "

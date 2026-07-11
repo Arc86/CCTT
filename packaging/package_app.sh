@@ -10,7 +10,7 @@ IDENTITY="Developer ID Application: Jesper Mol (9WFDLY652Y)"
 
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-APP="$ROOT/build/CCTTApp.app"
+APP="$ROOT/build/CCTT.app"
 CONTENTS="$APP/Contents"
 
 echo "▶ Building release…"
@@ -26,6 +26,10 @@ cp "$BIN_DIR/CCTTApp" "$CONTENTS/MacOS/CCTTApp"
 
 # SwiftPM resource bundle (Brand assets loaded via Bundle.module)
 cp -R "$BIN_DIR/CCTT_CCTTApp.bundle" "$CONTENTS/Resources/"
+
+# App icon (Finder/Get-Info). CFBundleIconFile=AppIcon in Info.plist.template.
+# Regenerate with packaging/icon/make_icon.sh when the logo changes.
+cp "$ROOT/packaging/icon/AppIcon.icns" "$CONTENTS/Resources/AppIcon.icns"
 
 # Info.plist (substitute version + public key)
 sed -e "s/__VERSION__/$VERSION/g" \

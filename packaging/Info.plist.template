@@ -5,6 +5,7 @@
   <key>CFBundleName</key>            <string>CCTT</string>
   <key>CFBundleDisplayName</key>     <string>CCTT</string>
   <key>CFBundleExecutable</key>      <string>CCTTApp</string>
+  <key>CFBundleIconFile</key>        <string>AppIcon</string>
   <key>CFBundleIdentifier</key>      <string>com.jespermol.CCTT</string>
   <key>CFBundlePackageType</key>     <string>APPL</string>
   <key>CFBundleShortVersionString</key> <string>__VERSION__</string>

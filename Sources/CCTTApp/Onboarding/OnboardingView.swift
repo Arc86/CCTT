@@ -18,13 +18,19 @@ enum OnboardingState {
 /// the app on clearly-labeled estimates, re-enableable later in Settings.
 struct OnboardingView: View {
     @Environment(SettingsStore.self) private var settingsStore
+    @Environment(UsageStore.self) private var usage
+    @Environment(PlanStore.self) private var planStore
     @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 12) {
-                Image(systemName: "gauge.with.dots.needle.67percent")
-                    .font(.system(size: 34)).foregroundStyle(.tint)
+                Brand.logo
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 54, height: 54)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 VStack(alignment: .leading) {
                     Text("Welcome to CCTT").font(.title2.bold())
                     Text("Your Claude Code token tracker").foregroundStyle(.secondary)
@@ -67,5 +73,8 @@ struct OnboardingView: View {
         settingsStore.settings.liveLimitsEnabled = enableLive
         OnboardingState.markOnboarded()
         dismissWindow(id: "onboarding")
+        // Trigger the Keychain read now (not on the next poll) so the prompt
+        // appears while the user is still in the opt-in flow.
+        if enableLive { LiveLimitsActivation.kick(planStore, usage) }
     }
 }

@@ -58,8 +58,29 @@ UI via SwiftUI previews + snapshot tests across live/estimated/credits/empty/deg
 - Test: `swift test` (Swift Testing; filter with `--filter <TestSuiteOrName>`)
 
 ## Status
+**1.0.x polish — CCTT.app rename + real icon + Keychain (2026-07-11):** the shipped
+bundle is now **`CCTT.app`** (was `CCTTApp.app`) — only the `.app` file name and the
+release zip/URL naming (`CCTT-<version>.zip`) changed; `CFBundleIdentifier` /
+`codesign --identifier` stay `com.jespermol.CCTT` (the Sparkle + Keychain anchor), and
+the internal SwiftPM target stays `CCTTApp`. The app has a **real rounded app icon**:
+`packaging/icon/make_icon.sh` bakes the provided logo onto a macOS squircle grid →
+committed `AppIcon.icns` (bundled via `CFBundleIconFile`) + `AppIcon-1024.png` (the
+runtime Dock/⌘-Tab icon, replacing the old raw-square assignment). The in-app
+`Brand` PNGs were **stale older art** (a different parrot) — `make_icon.sh` now also
+regenerates `Sources/CCTTApp/Resources/CCTTLogo.png` (full logo + CCTT wordmark) and
+`CCTTMark.png` (mascot-only crop) from the same source, so About + onboarding
+(`Brand.logo`) and the sidebar chip (`Brand.mark`) all show the new logo; onboarding
+also swapped its SF Symbol for the logo. **Keychain
+fixes:** (Bug A) opting into live limits now fires an immediate `PlanStore.refresh` via
+`LiveLimitsActivation.kick` (onboarding + Settings toggle) so the access prompt appears
+on click instead of up to ~120s later; (Bug B) `CachingCredentialsSource` (TDD'd, Core)
+caches the OAuth token in-process so the Keychain is read ~once per token lifetime, not
+every 120s poll — killing the repeated re-prompts. Caveat: Claude Code owns the
+credential item and can reset its ACL on its own token refresh, so "Always Allow" is
+still needed to fully avoid prompts. 200 tests green.
+
 **Auto-update + start-at-login (2026-07-10):** the app now ships as a real,
-notarized `CCTTApp.app` (`packaging/package_app.sh` assembles + embeds
+notarized `CCTT.app` (`packaging/package_app.sh` assembles + embeds
 `Sparkle.framework` + deep-signs with the Developer ID; `packaging/release.sh`
 notarizes, staples, EdDSA-signs, and appends to `appcast.xml`, fed from
 `raw.githubusercontent.com/Arc86/CCTT/main/appcast.xml` with GitHub Release

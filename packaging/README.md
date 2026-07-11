@@ -21,8 +21,20 @@
 export CCTT_ED_PUBKEY="<public key>"
 packaging/package_app.sh <version>
 packaging/release.sh <version>
-gh release create v<version> build/CCTTApp-<version>.zip --title "CCTT v<version>" --notes "…"
+gh release create v<version> build/CCTT-<version>.zip --title "CCTT v<version>" --notes "…"
 git add appcast.xml && git commit -m "release: v<version>" && git push
 ```
 The feed lives at `https://raw.githubusercontent.com/Arc86/CCTT/main/appcast.xml`;
 enclosure zips are GitHub Release assets.
+
+## App icon
+
+The Finder/Dock icon (`AppIcon.icns`, referenced by `CFBundleIconFile` and copied
+into the bundle by `package_app.sh`) plus the runtime Dock PNG are generated from
+`packaging/icon/CCTT-logo-source.png`. Regenerate after changing the logo:
+
+```sh
+packaging/icon/make_icon.sh
+```
+Both `packaging/icon/AppIcon.icns` and the `AppIcon-1024.png` copies are committed
+so releases don't need Python/PIL at package time.
