@@ -157,7 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // to `.regular`, where ⌘-Tab and the Dock show this icon. Use the
         // pre-rounded squircle tile (macOS doesn't round Dock icons for us) so it
         // matches the bundle's AppIcon.icns instead of a flat square.
-        if let url = Bundle.module.url(forResource: "AppIcon-1024", withExtension: "png"),
+        if let url = AppResources.bundle.url(forResource: "AppIcon-1024", withExtension: "png"),
            let icon = NSImage(contentsOf: url) {
             NSApp.applicationIconImage = icon
         }

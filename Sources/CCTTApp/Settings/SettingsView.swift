@@ -2,16 +2,17 @@ import SwiftUI
 import AppKit
 import CCTTCore
 
-/// Brand artwork bundled with the app target. Loaded once from `Bundle.module`
-/// (works under both `swift build` and `swift run`). `CCTTLogo` is the full app
-/// icon (mascot + wordmark on a white rounded tile); `CCTTMark` is the mascot-only
-/// tile for tight spots like the sidebar header.
+/// Brand artwork bundled with the app target. Loaded once from `AppResources`
+/// (works under both `swift build` / `swift run` and the packaged, code-signed
+/// `.app` — see `AppResources`). `CCTTLogo` is the full app icon (mascot +
+/// wordmark on a white rounded tile); `CCTTMark` is the mascot-only tile for
+/// tight spots like the sidebar header.
 enum Brand {
     static let logo = load("CCTTLogo")
     static let mark = load("CCTTMark")
 
     private static func load(_ name: String) -> Image {
-        if let url = Bundle.module.url(forResource: name, withExtension: "png"),
+        if let url = AppResources.bundle.url(forResource: name, withExtension: "png"),
            let ns = NSImage(contentsOf: url) {
             return Image(nsImage: ns)
         }
