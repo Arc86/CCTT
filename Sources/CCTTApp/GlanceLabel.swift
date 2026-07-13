@@ -96,7 +96,6 @@ struct PopoverView: View {
             // Share math is token-based (the natural unit of "how much did this
             // project use"), regardless of the $⇄tokens display toggle.
             let grandTotal = all.reduce(0) { $0 + $1.totals.total }
-            let maxTotal = rows.first?.totals.total ?? 0
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 7) {
                     Image(systemName: "folder")
@@ -110,13 +109,13 @@ struct PopoverView: View {
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 9)
 
-                ForEach(rows, id: \.key) { r in
+                ForEach(Array(rows.enumerated()), id: \.element.key) { i, r in
                     ShareProjectRow(
                         name: r.key,
                         value: DefaultPaths.formatValue(totals: r.totals, costUSD: r.costUSD,
                                                         unit: display.unit),
                         share: grandTotal > 0 ? Double(r.totals.total) / Double(grandTotal) : 0,
-                        barFraction: maxTotal > 0 ? Double(r.totals.total) / Double(maxTotal) : 0)
+                        tint: Dash.paletteColor(i))
                 }
             }
         }
@@ -243,16 +242,18 @@ struct GaugeBar: View {
     }
 }
 
-/// One "Top projects" row: a faint share bar behind the row (its slice of usage
-/// vs. the busiest project), the project name, its percent-of-total, and the
-/// value in the chosen unit. The bar makes relative spend scannable at a glance.
+/// One "Top projects" row: a muted per-project colour bar behind the row (its
+/// share of total usage), the project name, its percent-of-total, and the value
+/// in the chosen unit. The bar makes each project's spend scannable at a glance.
 struct ShareProjectRow: View {
     let name: String
     let value: String
-    /// Share of the grand total (0…1), shown as the percent column.
+    /// Share of the grand total (0…1) — drives both the percent column and the
+    /// width of the coloured bar, so bar length reads as "share of total usage".
     let share: Double
-    /// Width of the faint bar relative to the busiest project (0…1).
-    let barFraction: Double
+    /// Per-project categorical colour; the share bar renders as a muted wash of it
+    /// so each project reads as a distinct band instead of one flat grey.
+    var tint: Color = .primary
 
     var body: some View {
         HStack(spacing: 9) {
@@ -274,8 +275,8 @@ struct ShareProjectRow: View {
         .background(alignment: .leading) {
             GeometryReader { geo in
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.primary.opacity(0.05))
-                    .frame(width: max(0, geo.size.width * min(1, max(0, barFraction))))
+                    .fill(tint.opacity(0.22))
+                    .frame(width: max(0, geo.size.width * min(1, max(0, share))))
             }
         }
         .accessibilityElement(children: .combine)
