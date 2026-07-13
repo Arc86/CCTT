@@ -52,7 +52,9 @@ struct PopoverView: View {
     // MARK: Limit gauges
 
     @ViewBuilder private var limits: some View {
-        if status.windows.isEmpty {
+        if let spend = status.spendLimit {
+            SpendLimitGaugeRow(spend: spend)
+        } else if status.windows.isEmpty {
             Label("\(DefaultPaths.formatTokens(snapshot.overall.total)) tokens total",
                   systemImage: "sum")
                 .font(.subheadline).foregroundStyle(.secondary)
@@ -220,6 +222,48 @@ struct LimitGaugeRow: View {
 
     private func resetText(_ date: Date) -> String {
         "resets \(date.formatted(.relative(presentation: .named)))"
+    }
+}
+
+/// The enterprise dollar spend-limit meter: "$11.70 of $70.00 spent" + a
+/// coloured bar + "N% used", with a "Spend limit · Resets …" caption. Mirrors
+/// `LimitGaugeRow` but in money rather than tokens.
+struct SpendLimitGaugeRow: View {
+    let spend: SpendLimitStatus
+
+    private var fraction: Double { min(1, max(0, spend.percent)) }
+    private var color: Color { UsageColor.forPercent(spend.percent) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("\(spentText) of \(capText) spent")
+                    .font(.system(size: 13, weight: .semibold)).monospacedDigit()
+                Spacer(minLength: 0)
+                Text("\(percentText) used")
+                    .font(.system(size: 13, weight: .bold)).monospacedDigit()
+                    .foregroundStyle(color)
+            }
+            GaugeBar(fraction: fraction, color: color)
+            HStack(spacing: 5) {
+                Text("Spend limit").font(.system(size: 11)).foregroundStyle(.secondary)
+                if let reset = spend.resetsAt {
+                    Text("· Resets \(resetText(reset))")
+                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Spend limit")
+        .accessibilityValue("\(spentText) of \(capText) spent, \(percentText) used, \(UsageColor.label(spend.percent))")
+    }
+
+    private var spentText: String { MoneyFormat.string(minorUnits: spend.spentMinorUnits, currency: spend.currency) }
+    private var capText: String { MoneyFormat.string(minorUnits: spend.capMinorUnits, currency: spend.currency) }
+    private var percentText: String { "\(Int((max(0, spend.percent) * 100).rounded()))%" }
+
+    private func resetText(_ date: Date) -> String {
+        date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
     }
 }
 

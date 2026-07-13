@@ -18,6 +18,10 @@ import Testing
     #expect(PlanConfig(kind: .unknown).planLabel == "Unknown plan")
 }
 
-@Test func planLabelFallsBackToOrgType() {
-    #expect(PlanConfig(kind: .enterprise, organizationType: "enterprise").planLabel == "enterprise")
+/// Enterprise is always labelled "Enterprise" — never the consumer tier name,
+/// even when it carries a `max_*` rate-limit tier (the tier only sizes caps).
+@Test func enterpriseIsAlwaysLabelledEnterprise() {
+    #expect(PlanConfig(kind: .enterprise, organizationType: "enterprise").planLabel == "Enterprise")
+    #expect(PlanConfig(kind: .enterprise, rateLimitTier: "default_claude_max_5x").planLabel == "Enterprise")
+    #expect(PlanConfig(kind: .enterprise, rateLimitTier: "default_claude_max_20x").planLabel == "Enterprise")
 }

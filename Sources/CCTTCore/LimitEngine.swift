@@ -18,6 +18,18 @@ public enum LimitEngine {
 
         switch plan.kind {
         case .subscription, .enterprise:
+            // Enterprise usage is governed by a dollar spend limit, not token
+            // windows — surface that meter when a spend cap is configured.
+            if plan.kind == .enterprise,
+               let spend = spendLimit(plan: plan, snapshot: snapshot, prices: prices,
+                                      live: live, now: now) {
+                let isLive = spend.provenance == .billed
+                return PlanStatus(kind: .enterprise, planLabel: plan.planLabel, windows: [],
+                                  credits: nil, spendLimit: spend,
+                                  costUSD: prices.costUSD(forByModel: snapshot.byModel),
+                                  provenance: isLive ? .live : .estimated,
+                                  liveAsOf: isLive ? live?.observedAt : nil, generatedAt: now)
+            }
             // Tier cap wins; fall back to a user-entered manual cap when the
             // tier is unknown (enterprise / unrecognised tier).
             let tierCaps = caps.caps(forTier: plan.rateLimitTier) ?? manualCaps
@@ -66,6 +78,28 @@ public enum LimitEngine {
         let percent: Double? = (cap ?? 0) > 0 ? Double(used) / Double(cap!) : nil
         return WindowStatus(kind: kind, usedTokens: used, capTokens: cap,
                             percent: percent, resetsAt: nil, provenance: .estimated)
+    }
+
+    /// The enterprise dollar spend limit: month-to-date derived cost (or the live
+    /// billed spend, when available) against the configured cap, resetting at the
+    /// next calendar month. `nil` when no dollar spend cap is configured.
+    private static func spendLimit(plan: PlanConfig, snapshot: UsageSnapshot,
+                                   prices: PriceTable, live: LiveLimits?,
+                                   now: Date) -> SpendLimitStatus? {
+        guard let cap = plan.creditGrant?.amountMinorUnits, cap > 0 else { return nil }
+        let reset = nextMonthStart(after: now)
+        // Prefer a real billed spend from the live endpoint when present.
+        if let used = live?.creditUsedMinorUnits {
+            return SpendLimitStatus(spentMinorUnits: used, capMinorUnits: cap,
+                                    percent: Double(used) / Double(cap), resetsAt: reset,
+                                    currency: live?.currency ?? plan.currency, provenance: .billed)
+        }
+        let monthCost = prices.costUSD(forByModel: snapshot.monthByModel)
+        let spent = Int((monthCost * 100).rounded())
+        return SpendLimitStatus(spentMinorUnits: spent, capMinorUnits: cap,
+                                percent: Double(spent) / Double(cap), resetsAt: reset,
+                                currency: plan.creditGrant?.currency ?? plan.currency,
+                                provenance: .derived)
     }
 
     private static func credits(plan: PlanConfig, live: LiveLimits?) -> CreditsStatus? {

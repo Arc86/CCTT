@@ -585,7 +585,15 @@ struct PlanBody: View {
                 Text(summary).font(.system(size: 11.5)).foregroundStyle(Dash.text3)
             }
 
-            if status.windows.isEmpty {
+            if let spend = status.spendLimit {
+                HStack(alignment: .top, spacing: 16) {
+                    MeterCard(label: "Spend limit", sub: "Monthly budget",
+                              fraction: spend.percent, usedText: spentUsed(spend),
+                              resets: spendResets(spend))
+                }
+                InsightLine(text: "You've spent \(MoneyFormat.string(minorUnits: spend.spentMinorUnits, currency: spend.currency)) of your \(MoneyFormat.string(minorUnits: spend.capMinorUnits, currency: spend.currency)) spend limit.",
+                            color: statusColor)
+            } else if status.windows.isEmpty {
                 InsightLine(text: "No live limits yet — enable them in Settings, or figures fall back to plan estimates.",
                             color: Dash.warn)
             } else {
@@ -628,6 +636,10 @@ struct PlanBody: View {
         return p >= 0.9 ? Dash.danger : p >= 0.7 ? Dash.warn : Dash.good
     }
     private var summary: String {
+        if let s = status.spendLimit {
+            guard let r = s.resetsAt else { return "Monthly spend limit" }
+            return "Spend limit resets \(r.formatted(.relative(presentation: .named)))"
+        }
         let resets = status.windows.compactMap { w -> String? in
             guard let r = w.resetsAt else { return nil }
             return "\(label(w.kind).lowercased()) resets \(r.formatted(.relative(presentation: .named)))"
@@ -652,6 +664,12 @@ struct PlanBody: View {
     }
     private func resets(_ w: WindowStatus) -> String? {
         w.resetsAt.map { "Resets \($0.formatted(.relative(presentation: .named)))" }
+    }
+    private func spentUsed(_ s: SpendLimitStatus) -> String {
+        "\(MoneyFormat.string(minorUnits: s.spentMinorUnits, currency: s.currency)) / \(MoneyFormat.string(minorUnits: s.capMinorUnits, currency: s.currency))"
+    }
+    private func spendResets(_ s: SpendLimitStatus) -> String? {
+        s.resetsAt.map { "Resets \($0.formatted(.relative(presentation: .named)))" }
     }
 }
 

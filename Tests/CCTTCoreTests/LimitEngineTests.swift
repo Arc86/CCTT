@@ -116,6 +116,44 @@ private func snapshot(fiveHour: TokenTotals = .zero, weekly: TokenTotals = .zero
     #expect(status.credits == nil)
 }
 
+/// Enterprise with a configured dollar spend cap surfaces a spend-limit meter
+/// (derived month-to-date cost ÷ cap) in place of the token windows, and the
+/// credits line is suppressed as the same $70 is now the spend limit.
+@Test func enterpriseWithSpendCapShowsSpendLimit() {
+    let plan = PlanConfig(kind: .enterprise, rateLimitTier: "default_claude_max_5x",
+                          hasExtraUsageEnabled: true,
+                          creditGrant: CreditGrant(available: true, amountMinorUnits: 7000,
+                                                   currency: "USD"))
+    // Month-to-date: 468k opus output tokens → $11.70 derived.
+    let snap = snapshot(monthByModel: [Rollup(key: "claude-opus-4-8[1m]",
+                                              totals: TokenTotals(output: 468_000))])
+    let status = LimitEngine.status(plan: plan, snapshot: snap, caps: .bundled,
+                                    prices: .bundled, live: nil,
+                                    apiMonthlyBudgetUSD: nil, now: now)
+    let spend = status.spendLimit!
+    #expect(spend.spentMinorUnits == 1170)          // $11.70
+    #expect(spend.capMinorUnits == 7000)            // $70.00
+    #expect(abs(spend.percent - 1170.0 / 7000.0) < 1e-9)
+    #expect(spend.currency == "USD")
+    #expect(spend.provenance == .derived)
+    #expect(spend.resetsAt != nil)
+    #expect(status.windows.isEmpty)                 // replaces token windows
+    #expect(status.credits == nil)                  // not duplicated as credits
+    #expect(abs(status.headlinePercent! - 1170.0 / 7000.0) < 1e-9)
+    #expect(status.provenance == .estimated)
+}
+
+/// Enterprise with no configured spend cap keeps the token-window behavior.
+@Test func enterpriseWithoutSpendCapKeepsTokenWindows() {
+    let plan = PlanConfig(kind: .enterprise, rateLimitTier: "default_claude_max_5x")
+    let snap = snapshot(fiveHour: TokenTotals(input: 1_000_000))
+    let status = LimitEngine.status(plan: plan, snapshot: snap, caps: .bundled,
+                                    prices: .bundled, live: nil,
+                                    apiMonthlyBudgetUSD: nil, now: now)
+    #expect(status.spendLimit == nil)
+    #expect(!status.windows.isEmpty)
+}
+
 @Test func enterpriseWithoutTierHasNilPercent() {
     let plan = PlanConfig(kind: .enterprise, rateLimitTier: nil)
     let status = LimitEngine.status(plan: plan, snapshot: snapshot(), caps: .bundled,

@@ -71,13 +71,17 @@ public struct PlanConfig: Sendable, Equatable {
     /// Short, human-readable plan name for the popover header.
     public var planLabel: String {
         switch kind {
-        case .subscription, .enterprise:
+        // Enterprise is always labelled "Enterprise" — the rate-limit tier only
+        // sizes token caps (which enterprise surfaces as a $ spend limit anyway),
+        // so it must not masquerade as a "Max 5x" consumer plan.
+        case .enterprise:
+            return "Enterprise"
+        case .subscription:
             switch rateLimitTier {
             case "default_claude_pro":    return "Pro"
             case "default_claude_max_5x": return "Max 5x"
             case "default_claude_max_20x": return "Max 20x"
-            default:
-                return organizationType ?? (kind == .enterprise ? "Enterprise" : "Subscription")
+            default:                      return organizationType ?? "Subscription"
             }
         case .api:     return "API"
         case .unknown: return "Unknown plan"
