@@ -28,8 +28,9 @@ func deduplicated(_ events: [UsageEvent]) -> [UsageEvent] {
 /// Pure aggregation: de-duplicated events → grouped, sorted rollups.
 public func aggregate(events: [UsageEvent], parseErrors: Int, now: Date) -> UsageSnapshot {
     let unique = deduplicated(events)
+    let blocks = SessionBlocks.segment(unique)
+    let currentBlock = SessionBlocks.current(blocks, now: now)
 
-    let fiveHourStart = now.addingTimeInterval(-5 * 3600)
     let weeklyStart = now.addingTimeInterval(-7 * 24 * 3600)
     var cal = Calendar(identifier: .gregorian)
     cal.timeZone = TimeZone(identifier: "UTC")!
@@ -42,7 +43,6 @@ public func aggregate(events: [UsageEvent], parseErrors: Int, now: Date) -> Usag
     var agentKind: [String: TokenTotals] = [:]
     var skill: [String: TokenTotals] = [:]
     var plugin: [String: TokenTotals] = [:]
-    var fiveHour = TokenTotals.zero
     var weekly = TokenTotals.zero
     var monthToDate = TokenTotals.zero
     var monthModel: [String: TokenTotals] = [:]
@@ -56,7 +56,6 @@ public func aggregate(events: [UsageEvent], parseErrors: Int, now: Date) -> Usag
         agentKind[e.agentKind, default: .zero] += t
         if let s = e.skill { skill[s, default: .zero] += t }
         if let p = e.plugin { plugin[p, default: .zero] += t }
-        if e.timestamp > fiveHourStart { fiveHour += t }
         if e.timestamp > weeklyStart { weekly += t }
         if e.timestamp >= monthStart {
             monthToDate += t
@@ -72,7 +71,8 @@ public func aggregate(events: [UsageEvent], parseErrors: Int, now: Date) -> Usag
         byAgentKind: sortedRollups(agentKind),
         bySkill: sortedRollups(skill),
         byPlugin: sortedRollups(plugin),
-        fiveHour: fiveHour,
+        fiveHour: currentBlock?.totals ?? .zero,
+        fiveHourBlock: currentBlock,
         weekly: weekly,
         monthToDate: monthToDate,
         monthByModel: sortedRollups(monthModel),

@@ -4,12 +4,14 @@ import Foundation
 
 private let now = Date(timeIntervalSince1970: 1_783_000_000)
 
-private func snapshot(fiveHour: TokenTotals = .zero, weekly: TokenTotals = .zero,
+private func snapshot(fiveHour: TokenTotals = .zero, fiveHourBlock: SessionBlock? = nil,
+                      weekly: TokenTotals = .zero,
                       monthToDate: TokenTotals = .zero, byModel: [Rollup] = [],
                       monthByModel: [Rollup] = []) -> UsageSnapshot {
     UsageSnapshot(overall: .zero, byProject: [], byModel: byModel, bySession: [],
                   byAgentKind: [], bySkill: [], byPlugin: [],
-                  fiveHour: fiveHour, weekly: weekly, monthToDate: monthToDate,
+                  fiveHour: fiveHour, fiveHourBlock: fiveHourBlock,
+                  weekly: weekly, monthToDate: monthToDate,
                   monthByModel: monthByModel, parseErrors: 0, generatedAt: now)
 }
 
@@ -162,4 +164,39 @@ private func snapshot(fiveHour: TokenTotals = .zero, weekly: TokenTotals = .zero
     #expect(status.windows.allSatisfy { $0.percent == nil })
     #expect(status.headlinePercent == nil)
     #expect(status.provenance == .estimated)
+}
+
+// MARK: - Local resetsAt on the estimated path
+
+@Test func estimatedFiveHourResetsAtComesFromTheOpenBlock() {
+    let start = now.addingTimeInterval(-3600)          // block opened an hour ago
+    let block = SessionBlock(start: start, end: start.addingTimeInterval(5 * 3600),
+                             totals: TokenTotals(input: 1_000_000))
+    let plan = PlanConfig(kind: .subscription, rateLimitTier: "default_claude_max_5x")
+    let status = LimitEngine.status(
+        plan: plan,
+        snapshot: snapshot(fiveHour: block.totals, fiveHourBlock: block),
+        caps: .bundled, prices: .bundled, live: nil,
+        apiMonthlyBudgetUSD: nil, now: now)
+    let five = status.windows.first { $0.kind == .fiveHour }!
+    // Previously nil on the estimated path — estimate-only users had no countdown.
+    #expect(five.resetsAt == start.addingTimeInterval(5 * 3600))
+    #expect(five.provenance == .estimated)
+}
+
+@Test func liveFiveHourResetsAtWinsOverTheLocalBlock() {
+    let start = now.addingTimeInterval(-3600)
+    let liveReset = now.addingTimeInterval(2 * 3600)   // deliberately != block end
+    let block = SessionBlock(start: start, end: start.addingTimeInterval(5 * 3600),
+                             totals: TokenTotals(input: 1_000_000))
+    let plan = PlanConfig(kind: .subscription, rateLimitTier: "default_claude_max_5x")
+    let status = LimitEngine.status(
+        plan: plan,
+        snapshot: snapshot(fiveHour: block.totals, fiveHourBlock: block),
+        caps: .bundled, prices: .bundled,
+        live: LiveLimits(fiveHourPercent: 0.4, fiveHourResetsAt: liveReset),
+        apiMonthlyBudgetUSD: nil, now: now)
+    let five = status.windows.first { $0.kind == .fiveHour }!
+    #expect(five.resetsAt == liveReset)
+    #expect(five.provenance == .live)
 }

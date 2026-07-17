@@ -19,7 +19,10 @@ public struct UsageSnapshot: Sendable, Equatable {
     public let bySkill: [Rollup]
     public let byPlugin: [Rollup]
     // Rolling / calendar windows for the limit engine (Plan 2).
-    public let fiveHour: TokenTotals      // rolling last 5 hours
+    public let fiveHour: TokenTotals      // the currently-open 5h block (zero when none)
+    /// The currently-open anchored 5-hour block, or `nil` when none is open.
+    /// Carries `start`/`end` so `LimitEngine` can derive a local `resetsAt`.
+    public let fiveHourBlock: SessionBlock?
     public let weekly: TokenTotals        // rolling last 7 days
     public let monthToDate: TokenTotals   // calendar month-to-date (UTC)
     public let monthByModel: [Rollup]     // month-to-date, per model (for $ cost)
@@ -35,13 +38,15 @@ public struct UsageSnapshot: Sendable, Equatable {
 
     public init(overall: TokenTotals, byProject: [Rollup], byModel: [Rollup],
                 bySession: [Rollup], byAgentKind: [Rollup], bySkill: [Rollup],
-                byPlugin: [Rollup], fiveHour: TokenTotals, weekly: TokenTotals,
+                byPlugin: [Rollup], fiveHour: TokenTotals,
+                fiveHourBlock: SessionBlock? = nil, weekly: TokenTotals,
                 monthToDate: TokenTotals, monthByModel: [Rollup],
                 parseErrors: Int, generatedAt: Date) {
         self.overall = overall; self.byProject = byProject; self.byModel = byModel
         self.bySession = bySession; self.byAgentKind = byAgentKind
         self.bySkill = bySkill; self.byPlugin = byPlugin
-        self.fiveHour = fiveHour; self.weekly = weekly
+        self.fiveHour = fiveHour; self.fiveHourBlock = fiveHourBlock
+        self.weekly = weekly
         self.monthToDate = monthToDate; self.monthByModel = monthByModel
         self.parseErrors = parseErrors; self.generatedAt = generatedAt
     }

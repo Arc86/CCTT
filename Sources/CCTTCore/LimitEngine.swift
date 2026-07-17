@@ -37,7 +37,7 @@ public enum LimitEngine {
             let five = windowStatus(kind: .fiveHour, used: snapshot.fiveHour.total,
                                     cap: tierCaps?.fiveHourTokens,
                                     livePercent: live?.fiveHourPercent,
-                                    reset: live?.fiveHourResetsAt)
+                                    reset: live?.fiveHourResetsAt ?? snapshot.fiveHourBlock?.end)
             let week = windowStatus(kind: .weekly, used: snapshot.weekly.total,
                                     cap: tierCaps?.weeklyTokens,
                                     livePercent: live?.weeklyPercent,
@@ -76,8 +76,10 @@ public enum LimitEngine {
                                 percent: livePercent, resetsAt: reset, provenance: .live)
         }
         let percent: Double? = (cap ?? 0) > 0 ? Double(used) / Double(cap!) : nil
+        // `reset` is the local block end on this path — the only countdown an
+        // estimate-only user gets. Weekly passes nil (no local anchor exists).
         return WindowStatus(kind: kind, usedTokens: used, capTokens: cap,
-                            percent: percent, resetsAt: nil, provenance: .estimated)
+                            percent: percent, resetsAt: reset, provenance: .estimated)
     }
 
     /// The enterprise dollar spend limit: month-to-date derived cost (or the live
