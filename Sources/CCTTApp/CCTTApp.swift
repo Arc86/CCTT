@@ -186,6 +186,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum LiveLimitsActivation {
     static func kick(_ planStore: PlanStore, _ usage: UsageStore) {
         NSApp.activate(ignoringOtherApps: true)
+        // A direct user request (opt-in, or retry after a denied Keychain
+        // prompt) must never be silently swallowed by the background-poll
+        // throttle — clear it so this refresh is guaranteed to reach the
+        // provider and the prompt appears on the click.
+        planStore.resetFetchThrottle()
         Task { await planStore.refresh(snapshot: usage.snapshot) }
     }
 }

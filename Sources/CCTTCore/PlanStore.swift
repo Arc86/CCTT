@@ -71,6 +71,16 @@ public final class PlanStore {
         status = newStatus
     }
 
+    /// Clears the fetch throttle so the very next `refresh` is guaranteed to
+    /// call `provider.fetch()`, regardless of an in-flight backoff. For a
+    /// *user-initiated* retry (the Live-limits toggle): a direct request must
+    /// never be silently swallowed by backoff meant for background polling —
+    /// the Keychain prompt has to appear on the click, not up to `PollSchedule`'s
+    /// cap later.
+    public func resetFetchThrottle() {
+        nextFetchAt = nil
+    }
+
     /// Calls `provider.fetch()` only when `PollSchedule` allows it; otherwise
     /// reuses the last-held result untouched. This is the fetch-level gate
     /// `PollSchedule` was designed for — a throttled endpoint must stop being

@@ -183,3 +183,22 @@ private final class MutableClock: @unchecked Sendable {
     #expect(provider.calls == 3)   // disabled is free and must never be gated
     #expect(store.status.liveHealth == nil)
 }
+
+// MARK: - User-initiated retry must never be swallowed by backoff
+
+@MainActor
+@Test func resetFetchThrottleForcesTheNextRefreshToCallTheProviderWithoutAdvancingTheClock() async {
+    let provider = CountingProvider(LiveFetchResult(limits: nil, outcome: .transient))
+    let store = PlanStore(configURL: fixtureConfigURL, provider: provider, clock: { now })
+    await store.refresh(snapshot: .empty(now: now))
+    #expect(provider.calls == 1)
+
+    // Still well inside the backoff window an ordinary refresh would skip it —
+    // confirm the gate is actually armed before clearing it.
+    await store.refresh(snapshot: .empty(now: now))
+    #expect(provider.calls == 1)
+
+    store.resetFetchThrottle()
+    await store.refresh(snapshot: .empty(now: now))
+    #expect(provider.calls == 2)   // throttle cleared — the provider was hit again, clock unchanged
+}
