@@ -150,6 +150,9 @@ struct MenuBarLabel: View {
         if settingsStore.settings.showPercentInMenuBar {
             Text(DefaultPaths.formatPercent(planStore.status,
                                             fallbackTokens: store.snapshot.overall.total))
+                // The gauge Image's accessibilityLabel already speaks the percent;
+                // without this VoiceOver reads it twice.
+                .accessibilityHidden(true)
         }
     }
 }

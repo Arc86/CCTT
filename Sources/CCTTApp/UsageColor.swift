@@ -5,6 +5,17 @@ import SwiftUI
 /// the whole app agrees on what "getting close to the limit" looks and reads
 /// like (spec §8.1). Meaning is never carried by colour alone — every colour has
 /// a matching `label(_:)` word for redundancy (a11y guide: icon + label).
+///
+/// These thresholds are **fixed and deliberately do not follow the user's
+/// configurable alert thresholds** (`AppSettings.thresholds`). The two answer
+/// different questions: the colour is a shared visual language, and the words
+/// pinned to it ("OK"/"High"/"Critical") must mean the same thing for everyone,
+/// whereas an alert threshold is a personal choice about when to be interrupted.
+/// Making the colour user-relative would make "Critical" mean different things to
+/// different people. ClaudeMeter draws the same line, for the same reason.
+///
+/// Note `gaugeSymbol`'s 0.5/0.85 split is *not* a competing status threshold: it
+/// selects a needle position (33/67/100%), i.e. a magnitude, not a state.
 enum UsageColor {
     /// Bucket a 0…1+ fraction into the headline colour. `nil` (unknown) is neutral.
     static func forPercent(_ percent: Double?) -> Color {
