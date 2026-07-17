@@ -46,9 +46,20 @@ private let fiveHours: TimeInterval = 5 * 3600
     #expect(blocks[1].totals.output == 20)
 }
 
-@Test func inactivityGapOfFiveHoursOpensANewBlockEvenWithinTheWindow() {
-    // Both events sit inside one 5h span from the *first* event, but the gap
-    // between them is >= 5h, so the window reset.
+@Test func idleGapInsideTheWindowStaysInTheSameBlock() {
+    // Claude's 5h window runs five hours of wall-clock from the first message —
+    // going idle does NOT reset it. A 4h gap inside the window is still one block.
+    let events = [
+        UsageEvent.fixture(timestamp: hour0, output: 10, requestId: "r1", messageId: "m1"),
+        UsageEvent.fixture(timestamp: hour0.addingTimeInterval(4 * 3600),
+                           output: 20, requestId: "r2", messageId: "m2"),
+    ]
+    let blocks = SessionBlocks.segment(events)
+    #expect(blocks.count == 1)
+    #expect(blocks[0].totals.output == 30)
+}
+
+@Test func aLongIdleGapClosesTheBlockOnlyByAgingOut() {
     let events = [
         UsageEvent.fixture(timestamp: hour0, output: 10, requestId: "r1", messageId: "m1"),
         UsageEvent.fixture(timestamp: hour0.addingTimeInterval(fiveHours + 1800),
@@ -75,6 +86,14 @@ private let fiveHours: TimeInterval = 5 * 3600
     ])
     let now = hour0.addingTimeInterval(3600)
     #expect(SessionBlocks.current(blocks, now: now)?.totals.output == 10)
+}
+
+@Test func currentIncludesTheExactBlockStart() {
+    let blocks = SessionBlocks.segment([
+        UsageEvent.fixture(timestamp: hour0, output: 10, requestId: "r1", messageId: "m1")
+    ])
+    // The lower bound is inclusive; only `end` is exclusive.
+    #expect(SessionBlocks.current(blocks, now: hour0)?.totals.output == 10)
 }
 
 @Test func currentIsNilOnceTheBlockHasClosed() {

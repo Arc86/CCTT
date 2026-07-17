@@ -25,23 +25,24 @@ public enum SessionBlocks {
 
     /// Segment de-duplicated events into blocks, oldest first.
     ///
-    /// A block opens at its first event's timestamp floored to the hour, and closes
-    /// when an event arrives either `duration` after the block start (the block aged
-    /// out) or `duration` after the previous event (an inactivity gap reset the
-    /// window). Both boundaries are half-open: an event exactly at the boundary
-    /// opens the next block. Input need not be sorted.
+    /// A block opens at its first event's timestamp floored to the hour and closes
+    /// when an event arrives `duration` or more after that start — the window aged
+    /// out. The boundary is half-open: an event exactly at `start + duration` opens
+    /// the next block. Input need not be sorted.
+    ///
+    /// Ageing out is the *only* rule. Going idle does not reset the window: Claude's
+    /// five hours are wall-clock from the first message, so a long quiet stretch
+    /// inside a block leaves it open.
     public static func segment(_ deduped: [UsageEvent]) -> [SessionBlock] {
         let sorted = deduped.sorted { $0.timestamp < $1.timestamp }
         var blocks: [SessionBlock] = []
         var start: Date?
-        var previous: Date?
         var totals = TokenTotals.zero
 
         for e in sorted {
             let opensNewBlock: Bool = {
-                guard let start, let previous else { return true }
+                guard let start else { return true }
                 return e.timestamp.timeIntervalSince(start) >= duration
-                    || e.timestamp.timeIntervalSince(previous) >= duration
             }()
             if opensNewBlock {
                 if let start {
@@ -53,7 +54,6 @@ public enum SessionBlocks {
                 totals = .zero
             }
             totals += e.totals
-            previous = e.timestamp
         }
         if let start {
             blocks.append(SessionBlock(start: start,
@@ -73,6 +73,7 @@ public enum SessionBlocks {
     /// keeps segmentation independent of the machine's timezone.
     static func floorToHour(_ date: Date) -> Date {
         var cal = Calendar(identifier: .gregorian)
+        // UTC is always resolvable by Foundation, so the force-unwrap is safe.
         cal.timeZone = TimeZone(identifier: "UTC")!
         return cal.date(from: cal.dateComponents([.year, .month, .day, .hour], from: date)) ?? date
     }
