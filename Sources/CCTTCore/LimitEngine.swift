@@ -38,12 +38,14 @@ public enum LimitEngine {
                                     cap: tierCaps?.fiveHourTokens,
                                     livePercent: live?.fiveHourPercent,
                                     liveReset: live?.fiveHourResetsAt,
-                                    localReset: snapshot.fiveHourBlock?.end)
+                                    localReset: snapshot.fiveHourBlock?.end,
+                                    duration: SessionBlocks.duration, now: now)
             let week = windowStatus(kind: .weekly, used: snapshot.weekly.total,
                                     cap: tierCaps?.weeklyTokens,
                                     livePercent: live?.weeklyPercent,
                                     liveReset: live?.weeklyResetsAt,
-                                    localReset: nil)   // a rolling window has no local anchor
+                                    localReset: nil,   // a rolling window has no local anchor
+                                    duration: 7 * 24 * 3600, now: now)
             return PlanStatus(kind: plan.kind, planLabel: plan.planLabel,
                               windows: [five, week], credits: creditsStatus,
                               costUSD: prices.costUSD(forByModel: snapshot.byModel),
@@ -75,19 +77,26 @@ public enum LimitEngine {
     /// can carry a percent with no parseable `resets_at` (the decoder reads the two
     /// fields independently), and `WindowStatus` has a single provenance for the
     /// whole window — so `??`-merging them would let a `.live` window report our
-    /// local block guess as a live reset time.
+    /// local block guess as a live reset time, and `Pace` would inherit that lie.
     private static func windowStatus(kind: WindowKind, used: Int, cap: Int?,
                                      livePercent: Double?, liveReset: Date?,
-                                     localReset: Date?) -> WindowStatus {
-        if let livePercent {
-            return WindowStatus(kind: kind, usedTokens: used, capTokens: cap,
-                                percent: livePercent, resetsAt: liveReset, provenance: .live)
-        }
-        let percent: Double? = (cap ?? 0) > 0 ? Double(used) / Double(cap!) : nil
-        // The local block end is the only countdown an estimate-only user gets.
-        // Weekly passes nil — a rolling window has no local anchor.
-        return WindowStatus(kind: kind, usedTokens: used, capTokens: cap,
-                            percent: percent, resetsAt: localReset, provenance: .estimated)
+                                     localReset: Date?,
+                                     duration: TimeInterval, now: Date) -> WindowStatus {
+        let isLive = livePercent != nil
+        let percent: Double? = livePercent
+            ?? ((cap ?? 0) > 0 ? Double(used) / Double(cap!) : nil)
+        let provenance: Provenance = isLive ? .live : .estimated
+        let reset: Date? = isLive ? liveReset : localReset
+        // Pace needs an anchored window end. Weekly without live has none, so pace
+        // stays nil there — a rolling window's elapsed fraction is 1.0 by
+        // construction, which would make the ratio meaningless.
+        let pace: Pace? = {
+            guard let percent, let reset else { return nil }
+            return Pace.evaluate(percent: percent, windowEnd: reset, duration: duration,
+                                 now: now, provenance: provenance)
+        }()
+        return WindowStatus(kind: kind, usedTokens: used, capTokens: cap, percent: percent,
+                            resetsAt: reset, provenance: provenance, pace: pace)
     }
 
     /// The enterprise dollar spend limit: month-to-date derived cost (or the live

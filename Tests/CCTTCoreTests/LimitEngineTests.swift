@@ -219,3 +219,33 @@ private func snapshot(fiveHour: TokenTotals = .zero, fiveHourBlock: SessionBlock
     #expect(five.provenance == .live)
     #expect(five.resetsAt == nil)      // NOT block.end
 }
+
+// MARK: - Pace attachment
+
+@Test func weeklyPaceIsNilWithoutLiveBecauseTheWindowIsRolling() {
+    // A rolling window's elapsed fraction is 1.0 by construction, so a ratio would
+    // be meaningless. nil is the honest answer.
+    let plan = PlanConfig(kind: .subscription, rateLimitTier: "default_claude_max_5x")
+    let status = LimitEngine.status(
+        plan: plan,
+        snapshot: snapshot(weekly: TokenTotals(input: 5_000_000)),
+        caps: .bundled, prices: .bundled, live: nil,
+        apiMonthlyBudgetUSD: nil, now: now)
+    #expect(status.windows.first { $0.kind == .weekly }?.pace == nil)
+}
+
+@Test func fiveHourPaceIsComputedFromTheLocalBlockWithoutLive() {
+    // The estimate-only path gets pacing too, because the block supplies an anchor.
+    let start = now.addingTimeInterval(-2.5 * 3600)   // halfway through the block
+    let block = SessionBlock(start: start, end: start.addingTimeInterval(5 * 3600),
+                             totals: TokenTotals(input: 3_000_000))  // 60% of the 5M cap
+    let plan = PlanConfig(kind: .subscription, rateLimitTier: "default_claude_max_5x")
+    let status = LimitEngine.status(
+        plan: plan,
+        snapshot: snapshot(fiveHour: block.totals, fiveHourBlock: block),
+        caps: .bundled, prices: .bundled, live: nil,
+        apiMonthlyBudgetUSD: nil, now: now)
+    let pace = status.windows.first { $0.kind == .fiveHour }?.pace
+    #expect(pace?.status == .willExceed)          // 60% used at 50% elapsed → ratio 1.2
+    #expect(pace?.provenance == .estimated)       // inherited, never invented
+}

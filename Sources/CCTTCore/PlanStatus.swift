@@ -15,11 +15,15 @@ public struct WindowStatus: Sendable, Equatable {
     public let percent: Double?     // 0...1+ (fraction), nil when uncomputable
     public let resetsAt: Date?      // live reset, else the local block end (5h only)
     public let provenance: Provenance
+    /// Burn rate for this window. `nil` when undefined — notably always `nil` for
+    /// the weekly window without live limits, since a rolling window has no anchor.
+    public let pace: Pace?
 
     public init(kind: WindowKind, usedTokens: Int, capTokens: Int?, percent: Double?,
-                resetsAt: Date?, provenance: Provenance) {
+                resetsAt: Date?, provenance: Provenance, pace: Pace? = nil) {
         self.kind = kind; self.usedTokens = usedTokens; self.capTokens = capTokens
         self.percent = percent; self.resetsAt = resetsAt; self.provenance = provenance
+        self.pace = pace
     }
 }
 

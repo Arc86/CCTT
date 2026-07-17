@@ -203,6 +203,9 @@ struct LimitGaugeRow: View {
                     .monospacedDigit().foregroundStyle(color)
             }
             GaugeBar(fraction: fraction, color: color)
+            if let text = paceText {
+                Text(text).font(.system(size: 11)).foregroundStyle(.orange)
+            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(name) limit")
@@ -214,9 +217,22 @@ struct LimitGaugeRow: View {
         return "\(Int((max(0, p) * 100).rounded()))%"
     }
 
+    /// Only shown when the user is actually off-pace and we can name a moment —
+    /// an on-track pace is the normal case and deserves no chrome.
+    private var paceText: String? {
+        guard let pace = window.pace, pace.status != .onTrack,
+              let exhausts = pace.exhaustsAt else { return nil }
+        let time = exhausts.formatted(date: .omitted, time: .shortened)
+        let prefix = pace.provenance == .estimated ? "≈ at this pace" : "At this pace"
+        return "\(prefix): limit reached \(time)"
+    }
+
     private var accessibilityValue: String {
         var v = "\(percentText), \(UsageColor.label(window.percent))"
-        if let reset = window.resetsAt { v += ", resets \(reset.formatted(.relative(presentation: .named)))" }
+        if let reset = window.resetsAt {
+            v += ", resets \(reset.formatted(.relative(presentation: .named)))"
+        }
+        if let text = paceText { v += ", \(text)" }
         return v
     }
 
