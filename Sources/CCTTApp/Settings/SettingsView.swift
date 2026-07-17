@@ -527,6 +527,17 @@ private struct DataSettingsPane: View {
                 LabeledContent("Cap table", value: CapTable.bundled.version)
                 LabeledContent("Price table", value: PriceTable.bundled.version)
             }
+            Section("Status export") {
+                Toggle("Publish usage.json", isOn: $store.settings.exportEnabled)
+                    .onChange(of: store.settings.exportEnabled) { _, on in
+                        if !on { UsageExportWriter().remove() }
+                    }
+                LabeledContent("Path", value: DefaultPaths.exportURL.path)
+                Text("Writes a small JSON status file for external tools such as a "
+                     + "Claude Code statusline. CCTT only ever writes its own files — "
+                     + "never to ~/.claude.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section {
                 Button("Reset offset cache") {
                     try? FileManager.default.removeItem(at: DefaultPaths.offsetCacheURL)

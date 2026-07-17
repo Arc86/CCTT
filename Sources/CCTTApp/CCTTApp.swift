@@ -136,6 +136,11 @@ struct MenuBarLabel: View {
                     await planStore.refresh(snapshot: store.snapshot)
                     notifications.process(status: planStore.status,
                                           settings: settingsStore.settings)
+                    // Publish the status for external consumers (opt-in).
+                    let writer = UsageExportWriter()
+                    if settingsStore.settings.exportEnabled {
+                        try? writer.write(planStore.status)
+                    }
                     // The live rate-limit endpoint 429s under frequent polling, so
                     // PlanStore backs the interval off on failure and snaps it back
                     // to 120s on success (see PollSchedule).

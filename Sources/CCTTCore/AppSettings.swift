@@ -26,6 +26,9 @@ public struct AppSettings: Sendable, Equatable, Codable {
     /// Show the "% used" text next to the gauge glyph in the menu bar. When
     /// off, only the icon shows (compact). On by default.
     public var showPercentInMenuBar: Bool
+    /// Publish `~/.cctt/usage.json` for external tools. Opt-in — off by default:
+    /// writing a new file into the user's home directory is their choice to make.
+    public var exportEnabled: Bool
 
     public init(liveLimitsEnabled: Bool = false,
                 manualPlanKind: PlanKind? = nil,
@@ -37,7 +40,8 @@ public struct AppSettings: Sendable, Equatable, Codable {
                 projectsPathOverride: String? = nil,
                 hiddenTabs: Set<String> = [],
                 currencyCode: String = "USD",
-                showPercentInMenuBar: Bool = true) {
+                showPercentInMenuBar: Bool = true,
+                exportEnabled: Bool = false) {
         self.liveLimitsEnabled = liveLimitsEnabled
         self.manualPlanKind = manualPlanKind
         self.apiMonthlyBudgetUSD = apiMonthlyBudgetUSD
@@ -49,6 +53,7 @@ public struct AppSettings: Sendable, Equatable, Codable {
         self.hiddenTabs = hiddenTabs
         self.currencyCode = currencyCode
         self.showPercentInMenuBar = showPercentInMenuBar
+        self.exportEnabled = exportEnabled
     }
 
     // Lenient decoding: every field falls back to its default when absent.
@@ -66,6 +71,7 @@ public struct AppSettings: Sendable, Equatable, Codable {
         hiddenTabs = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenTabs) ?? d.hiddenTabs
         currencyCode = try c.decodeIfPresent(String.self, forKey: .currencyCode) ?? d.currencyCode
         showPercentInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showPercentInMenuBar) ?? d.showPercentInMenuBar
+        exportEnabled = try c.decodeIfPresent(Bool.self, forKey: .exportEnabled) ?? d.exportEnabled
     }
 }
 

@@ -31,6 +31,18 @@ public enum DefaultPaths {
         appSupportBase.appendingPathComponent("CCTT/live-limits.json")
     }
 
+    /// `~/.cctt/usage.json` — the opt-in machine-readable status export for
+    /// external consumers (Claude Code statuslines, dashboards).
+    ///
+    /// The only file CCTT writes outside Application Support, and the only one a
+    /// user is expected to reference by path — hence the short home-directory
+    /// location rather than a buried Application Support path. CCTT still never
+    /// writes to `~/.claude/`.
+    public static var exportURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".cctt/usage.json")
+    }
+
     private static var appSupportBase: URL {
         FileManager.default.urls(for: .applicationSupportDirectory,
                                  in: .userDomainMask).first!
