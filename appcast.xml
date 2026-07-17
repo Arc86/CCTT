@@ -46,5 +46,24 @@
       <pubDate>Mon, 13 Jul 2026 11:26:23 +0000</pubDate>
       <enclosure url="https://github.com/Arc86/CCTT/releases/download/v1.1.0/CCTT-1.1.0.zip" sparkle:edSignature="SQzhYMWGZ06agI5JrdskOQN8pU8Q/uru7VMsctKyFNHK8zrm3t1QN7YijQWCCng0vigpXsWHH+VIMcL3z6AUBw==" length="3224094" type="application/octet-stream" />
     </item>
+    <item>
+      <title>Version 1.2.0</title>
+      <description><![CDATA[
+<h2>CCTT 1.2.0</h2>
+<ul>
+  <li><b>See when your 5-hour limit resets — even without live limits.</b> CCTT now works out your 5-hour window from your own session history, so the popover shows <i>"resets in 4 hours"</i> whether or not you've turned live limits on. Previously that countdown only existed on the live path.</li>
+  <li><b>Know if you'll run out before the reset.</b> When you're burning through a window faster than it can sustain, the gauge now says so — <i>"At this pace: limit reached 16:10"</i> — so you find out with time to react, instead of at 100%.</li>
+  <li><b>The 5-hour number now resets instead of drifting down.</b> Claude's 5-hour window starts at your first message and runs a fixed five hours; going idle doesn't reset it. CCTT now measures it that way, so your 5-hour usage drops to 0% the moment a window closes rather than slowly decaying. This is the number behaving correctly — but it will look different from what you're used to.</li>
+  <li><b>Honest live status.</b> If your connection is rate-limited or your login needs refreshing, the badge now says <b>rate-limited</b> or <b>reconnect</b> instead of quietly showing an ever-older reading labelled "Live". CCTT also backs off politely when rate-limited, and recovers on its own.</li>
+  <li><b>Publish your usage for other tools (optional).</b> Turn on <b>Settings ▸ Data ▸ Publish usage.json</b> and CCTT writes a small status file to <code>~/.cctt/usage.json</code> — handy for a Claude Code statusline or your own dashboard. Off by default. CCTT still only ever reads Claude Code's data, never writes to it.</li>
+  <li><b>VoiceOver fix.</b> The menu-bar item no longer reads its percentage twice.</li>
+</ul>
+      ]]></description>
+      <sparkle:version>1.2.0</sparkle:version>
+      <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <pubDate>Fri, 17 Jul 2026 11:32:57 +0000</pubDate>
+      <enclosure url="https://github.com/Arc86/CCTT/releases/download/v1.2.0/CCTT-1.2.0.zip" sparkle:edSignature="YyWSSIESfkVV+6eotdpEN5gKH1cvqMXiUtumHhbsDdG/MOj/tlH+gRwJtNcBywH8UMpvN9EsmnrTzCQX8k6MBg==" length="3288502" type="application/octet-stream" />
+    </item>
   </channel>
 </rss>
