@@ -200,3 +200,22 @@ private func snapshot(fiveHour: TokenTotals = .zero, fiveHourBlock: SessionBlock
     #expect(five.resetsAt == liveReset)
     #expect(five.provenance == .live)
 }
+
+@Test func liveWindowNeverBorrowsTheLocalBlockEndAsItsReset() {
+    // The endpoint can return a percent with no parseable resets_at (the decoder
+    // reads the two fields independently). Filling the gap from our local block
+    // while labelling the window .live would report a guess as live data.
+    let start = now.addingTimeInterval(-3600)
+    let block = SessionBlock(start: start, end: start.addingTimeInterval(5 * 3600),
+                             totals: TokenTotals(input: 1_000_000))
+    let plan = PlanConfig(kind: .subscription, rateLimitTier: "default_claude_max_5x")
+    let status = LimitEngine.status(
+        plan: plan,
+        snapshot: snapshot(fiveHour: block.totals, fiveHourBlock: block),
+        caps: .bundled, prices: .bundled,
+        live: LiveLimits(fiveHourPercent: 0.4, fiveHourResetsAt: nil),
+        apiMonthlyBudgetUSD: nil, now: now)
+    let five = status.windows.first { $0.kind == .fiveHour }!
+    #expect(five.provenance == .live)
+    #expect(five.resetsAt == nil)      // NOT block.end
+}

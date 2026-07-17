@@ -13,7 +13,7 @@ public struct WindowStatus: Sendable, Equatable {
     public let usedTokens: Int
     public let capTokens: Int?      // nil when no cap is known
     public let percent: Double?     // 0...1+ (fraction), nil when uncomputable
-    public let resetsAt: Date?      // known only on the live path
+    public let resetsAt: Date?      // live reset, else the local block end (5h only)
     public let provenance: Provenance
 
     public init(kind: WindowKind, usedTokens: Int, capTokens: Int?, percent: Double?,
