@@ -62,6 +62,22 @@ public struct SpendLimitStatus: Sendable, Equatable {
     }
 }
 
+/// The health of the live rate-limit path, distinct from the *value* it produced.
+///
+/// A `.live`-provenance status can still be unhealthy: `StickyLiveLimitProvider`
+/// serves a real-but-stale reading through failures, and without this the UI would
+/// keep claiming "Live · 3d ago" on data that will never refresh again.
+public enum LiveHealth: Sendable, Equatable {
+    /// The last poll succeeded.
+    case ok
+    /// Throttled. `until` is the endpoint's own resume time when it offered one.
+    case rateLimited(until: Date?)
+    /// The token is dead and the user must reconnect. Actionable.
+    case needsReauth
+    /// A transient failure or a changed response shape.
+    case degraded
+}
+
 /// The computed, displayable plan status published to the UI.
 public struct PlanStatus: Sendable, Equatable {
     public let kind: PlanKind
@@ -77,15 +93,19 @@ public struct PlanStatus: Sendable, Equatable {
     /// unless this status is live-sourced. The UI compares it to "now" to render
     /// the sample's age and flag a stale-but-served live reading.
     public let liveAsOf: Date?
+    /// Health of the live path, or `nil` when live limits are disabled.
+    public let liveHealth: LiveHealth?
     public let generatedAt: Date
 
     public init(kind: PlanKind, planLabel: String, windows: [WindowStatus],
                 credits: CreditsStatus?, spendLimit: SpendLimitStatus? = nil,
                 costUSD: Double?, provenance: Provenance,
-                liveAsOf: Date? = nil, generatedAt: Date) {
+                liveAsOf: Date? = nil, liveHealth: LiveHealth? = nil,
+                generatedAt: Date) {
         self.kind = kind; self.planLabel = planLabel; self.windows = windows
         self.credits = credits; self.spendLimit = spendLimit; self.costUSD = costUSD
         self.provenance = provenance; self.liveAsOf = liveAsOf
+        self.liveHealth = liveHealth
         self.generatedAt = generatedAt
     }
 

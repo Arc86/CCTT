@@ -136,10 +136,10 @@ struct MenuBarLabel: View {
                     await planStore.refresh(snapshot: store.snapshot)
                     notifications.process(status: planStore.status,
                                           settings: settingsStore.settings)
-                    // The live rate-limit endpoint 429s under frequent polling;
-                    // 2 min keeps usage-status current enough while staying under
-                    // its budget so the real live number survives.
-                    try? await Task.sleep(for: .seconds(120))
+                    // The live rate-limit endpoint 429s under frequent polling, so
+                    // PlanStore backs the interval off on failure and snaps it back
+                    // to 120s on success (see PollSchedule).
+                    try? await Task.sleep(for: .seconds(planStore.nextPollInterval))
                 }
             }
         if settingsStore.settings.showPercentInMenuBar {

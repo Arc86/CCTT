@@ -249,3 +249,44 @@ private func snapshot(fiveHour: TokenTotals = .zero, fiveHourBlock: SessionBlock
     #expect(pace?.status == .willExceed)          // 60% used at 50% elapsed → ratio 1.2
     #expect(pace?.provenance == .estimated)       // inherited, never invented
 }
+
+// MARK: - liveHealth forwarding
+//
+// `liveHealth` is orthogonal to the window/spend computation below it — these
+// tests exist only to pin that every one of the four `PlanStatus(...)` return
+// sites actually forwards the parameter instead of dropping it on the floor.
+
+@Test func liveHealthForwardsOnTheSubscriptionWindowsPath() {
+    let plan = PlanConfig(kind: .subscription, rateLimitTier: "default_claude_max_5x")
+    let status = LimitEngine.status(plan: plan, snapshot: snapshot(), caps: .bundled,
+                                    prices: .bundled, live: nil,
+                                    apiMonthlyBudgetUSD: nil, liveHealth: .degraded, now: now)
+    #expect(status.liveHealth == .degraded)
+}
+
+@Test func liveHealthForwardsOnTheEnterpriseSpendLimitPath() {
+    let plan = PlanConfig(kind: .enterprise, rateLimitTier: "default_claude_max_5x",
+                          creditGrant: CreditGrant(available: true, amountMinorUnits: 7000,
+                                                   currency: "USD"))
+    let status = LimitEngine.status(plan: plan, snapshot: snapshot(), caps: .bundled,
+                                    prices: .bundled, live: nil,
+                                    apiMonthlyBudgetUSD: nil, liveHealth: .needsReauth, now: now)
+    #expect(status.spendLimit != nil)
+    #expect(status.liveHealth == .needsReauth)
+}
+
+@Test func liveHealthForwardsOnTheApiPath() {
+    let plan = PlanConfig(kind: .api)
+    let status = LimitEngine.status(plan: plan, snapshot: snapshot(), caps: .bundled,
+                                    prices: .bundled, live: nil,
+                                    apiMonthlyBudgetUSD: nil,
+                                    liveHealth: .rateLimited(until: nil), now: now)
+    #expect(status.liveHealth == .rateLimited(until: nil))
+}
+
+@Test func liveHealthForwardsOnTheUnknownPath() {
+    let status = LimitEngine.status(plan: .unknown(), snapshot: snapshot(), caps: .bundled,
+                                    prices: .bundled, live: nil,
+                                    apiMonthlyBudgetUSD: nil, liveHealth: .ok, now: now)
+    #expect(status.liveHealth == .ok)
+}

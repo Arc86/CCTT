@@ -12,6 +12,7 @@ public enum LimitEngine {
         live: LiveLimits?,
         apiMonthlyBudgetUSD: Double?,
         manualCaps: WindowCaps? = nil,
+        liveHealth: LiveHealth? = nil,
         now: Date
     ) -> PlanStatus {
         let creditsStatus = credits(plan: plan, live: live)
@@ -28,7 +29,8 @@ public enum LimitEngine {
                                   credits: nil, spendLimit: spend,
                                   costUSD: prices.costUSD(forByModel: snapshot.byModel),
                                   provenance: isLive ? .live : .estimated,
-                                  liveAsOf: isLive ? live?.observedAt : nil, generatedAt: now)
+                                  liveAsOf: isLive ? live?.observedAt : nil,
+                                  liveHealth: liveHealth, generatedAt: now)
             }
             // Tier cap wins; fall back to a user-entered manual cap when the
             // tier is unknown (enterprise / unrecognised tier).
@@ -50,7 +52,8 @@ public enum LimitEngine {
                               windows: [five, week], credits: creditsStatus,
                               costUSD: prices.costUSD(forByModel: snapshot.byModel),
                               provenance: isLive ? .live : .estimated,
-                              liveAsOf: isLive ? live?.observedAt : nil, generatedAt: now)
+                              liveAsOf: isLive ? live?.observedAt : nil,
+                              liveHealth: liveHealth, generatedAt: now)
 
         case .api:
             let monthCost = prices.costUSD(forByModel: snapshot.monthByModel)
@@ -63,13 +66,13 @@ public enum LimitEngine {
                                       resetsAt: nextMonthStart(after: now), provenance: .derived)
             return PlanStatus(kind: .api, planLabel: plan.planLabel, windows: [window],
                               credits: creditsStatus, costUSD: monthCost,
-                              provenance: .derived, generatedAt: now)
+                              provenance: .derived, liveHealth: liveHealth, generatedAt: now)
 
         case .unknown:
             return PlanStatus(kind: .unknown, planLabel: plan.planLabel, windows: [],
                               credits: creditsStatus,
                               costUSD: prices.costUSD(forByModel: snapshot.byModel),
-                              provenance: .estimated, generatedAt: now)
+                              provenance: .estimated, liveHealth: liveHealth, generatedAt: now)
         }
     }
 

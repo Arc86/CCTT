@@ -45,7 +45,7 @@ struct PopoverView: View {
                 .font(.system(size: 15, weight: .bold))
                 .tracking(-0.15)
             Spacer()
-            ProvenanceBadge(provenance: status.provenance, liveAsOf: status.liveAsOf)
+            ProvenanceBadge(status: status)
         }
     }
 
@@ -357,8 +357,9 @@ struct ShareProjectRow: View {
 /// a stale-but-served live reading shows "Live · 12m ago" and its dot ambers
 /// once past `staleAfter`, so a frozen number can never masquerade as current.
 struct ProvenanceBadge: View {
-    let provenance: Provenance
-    var liveAsOf: Date? = nil
+    /// Takes the whole status, not just `provenance`/`liveAsOf`, because health
+    /// (below) is an independent channel on the same value.
+    let status: PlanStatus
     /// A live sample older than this reads as stale (amber dot). One poll is
     /// ~2 min; ~3 poll intervals of tolerance before we flag staleness.
     private let staleAfter: TimeInterval = 6 * 60
@@ -373,23 +374,39 @@ struct ProvenanceBadge: View {
         .accessibilityLabel("Data source: \(accessibilityText)")
     }
 
+    private var provenance: Provenance { status.provenance }
+
     /// Age of the live sample, only when it's old enough to be worth showing.
     private var age: TimeInterval? {
-        guard provenance == .live, let liveAsOf else { return nil }
+        guard provenance == .live, let liveAsOf = status.liveAsOf else { return nil }
         let seconds = Date().timeIntervalSince(liveAsOf)
         return seconds >= 60 ? seconds : nil
     }
 
     private var isStale: Bool { (age ?? 0) >= staleAfter }
 
-    private var text: String {
-        switch provenance {
-        case .live:      return age.map { "Live · \(Self.relativeAge($0))" } ?? "Live"
-        case .estimated: return "Estimated"
-        case .derived:   return "≈ cost"
-        case .billed:    return "Billed"
-        case .measured:  return "Measured"
+    /// Health outranks age: "3d ago" on a dead token is worse than uninformative,
+    /// it is a claim that the number is current.
+    private var healthSuffix: String? {
+        switch status.liveHealth {
+        case .needsReauth:            return "reconnect"
+        case .rateLimited:            return "rate-limited"
+        case .degraded:               return "degraded"
+        case .ok, .none:              return nil
         }
+    }
+
+    private var text: String {
+        let base: String
+        switch provenance {
+        case .live:      base = age.map { "Live · \(Self.relativeAge($0))" } ?? "Live"
+        case .estimated: base = "Estimated"
+        case .derived:   base = "≈ cost"
+        case .billed:    base = "Billed"
+        case .measured:  base = "Measured"
+        }
+        guard let healthSuffix else { return base }
+        return "\(base) · \(healthSuffix)"
     }
 
     private var accessibilityText: String {
@@ -397,6 +414,9 @@ struct ProvenanceBadge: View {
     }
 
     private var dotColor: Color {
+        // A reported health problem ambers the dot regardless of provenance —
+        // even an .estimated badge should flag "reconnect" as actionable.
+        if healthSuffix != nil { return .orange }
         switch provenance {
         case .live:            return isStale ? .orange : .green
         case .billed:          return .green
@@ -421,8 +441,10 @@ struct ProvenanceBadge: View {
         HStack {
             Text("Max 20×").font(.headline)
             Spacer()
-            ProvenanceBadge(provenance: .live,
-                            liveAsOf: Date(timeIntervalSinceNow: -12 * 60))
+            ProvenanceBadge(status: PlanStatus(
+                kind: .subscription, planLabel: "Max 20×", windows: [], credits: nil,
+                costUSD: nil, provenance: .live,
+                liveAsOf: Date(timeIntervalSinceNow: -12 * 60), generatedAt: Date()))
         }
         LimitGaugeRow(name: "5-hour", window: WindowStatus(
             kind: .fiveHour, usedTokens: 38_000, capTokens: 100_000, percent: 0.38,

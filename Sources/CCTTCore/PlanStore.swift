@@ -8,6 +8,9 @@ import Observation
 public final class PlanStore {
     public private(set) var plan: PlanConfig
     public private(set) var status: PlanStatus
+    /// Seconds the app should wait before calling `refresh` again. Driven by
+    /// `PollSchedule`, so a throttled endpoint is polled less, not more.
+    public private(set) var nextPollInterval: TimeInterval = PollSchedule.base
 
     private let configURL: URL
     private let environment: [String: String]
@@ -16,6 +19,7 @@ public final class PlanStore {
     private let provider: LiveLimitProvider
     private let settingsProvider: @Sendable () -> AppSettings
     private let clock: @Sendable () -> Date
+    private var schedule = PollSchedule()
 
     public init(configURL: URL,
                 environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -42,14 +46,29 @@ public final class PlanStore {
         let detected = applyOverride(to: PlanDetector.detect(configURL: configURL,
                                                              environment: environment),
                                      settings: settings)
-        let live = await provider.fetch().limits
+        let result = await provider.fetch()
+        let now = clock()
+        schedule = schedule.next(after: result.outcome, now: now)
+        nextPollInterval = schedule.interval
         let newStatus = LimitEngine.status(plan: detected, snapshot: snapshot, caps: caps,
-                                           prices: prices, live: live,
+                                           prices: prices, live: result.limits,
                                            apiMonthlyBudgetUSD: settings.apiMonthlyBudgetUSD,
                                            manualCaps: manualCaps(from: settings),
-                                           now: clock())
+                                           liveHealth: Self.health(for: result.outcome),
+                                           now: now)
         plan = detected
         status = newStatus
+    }
+
+    /// Live health is `nil` when the path is switched off — there is nothing to report.
+    private static func health(for outcome: LiveFetchOutcome) -> LiveHealth? {
+        switch outcome {
+        case .disabled:                return nil
+        case .success:                 return .ok
+        case .rateLimited(let until):  return .rateLimited(until: until)
+        case .unauthorized:            return .needsReauth
+        case .transient, .malformed:   return .degraded
+        }
     }
 
     /// Applies a user's manual plan-kind override to the detected config.
