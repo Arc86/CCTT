@@ -1,81 +1,88 @@
-import Testing
 import Foundation
+import Testing
 @testable import CCTTCore
 
-@Test func unavailableProviderReturnsNil() async {
-    #expect(await UnavailableLiveLimitProvider().fetch() == nil)
+@Test func staticProviderReturnsItsValueAsSuccess() async {
+    let p = StaticLiveLimitProvider(LiveLimits(fiveHourPercent: 0.3, weeklyPercent: 0.1))
+    let out = await p.fetch()
+    #expect(out.limits?.fiveHourPercent == 0.3)
+    #expect(out.outcome == .success)
 }
 
-@Test func staticProviderReturnsValue() async {
-    let value = LiveLimits(fiveHourPercent: 0.3, weeklyPercent: 0.1)
-    let result = await StaticLiveLimitProvider(value).fetch()
-    #expect(result?.fiveHourPercent == 0.3)
-    #expect(result?.weeklyPercent == 0.1)
+@Test func staticProviderWithNilReportsDisabled() async {
+    let out = await StaticLiveLimitProvider(nil).fetch()
+    #expect(out.limits == nil)
+    #expect(out.outcome == .disabled)
 }
 
-/// Yields a scripted sequence of results, one per `fetch()`, so tests can
-/// simulate a flaky upstream (a good poll followed by transient failures).
-private actor ScriptedLiveLimitProvider: LiveLimitProvider {
-    private var results: [LiveLimits?]
-    private(set) var callCount = 0
-    init(_ results: [LiveLimits?]) { self.results = results }
-    func fetch() async -> LiveLimits? {
-        callCount += 1
-        return results.isEmpty ? nil : results.removeFirst()
+@Test func unavailableProviderReportsDisabled() async {
+    let out = await UnavailableLiveLimitProvider().fetch()
+    #expect(out.limits == nil)
+    #expect(out.outcome == .disabled)
+}
+
+/// Yields a scripted sequence of results, one per call.
+final class ScriptedProvider: LiveLimitProvider, @unchecked Sendable {
+    private var script: [LiveFetchResult]
+    init(_ script: [LiveFetchResult]) { self.script = script }
+    func fetch() async -> LiveFetchResult {
+        script.isEmpty ? .disabled : script.removeFirst()
     }
 }
 
-private let stickyBase = Date(timeIntervalSince1970: 1_783_000_000)
+struct StickyLiveLimitProviderTests {
 
-@Test func stickyServesLastGoodThroughTransientFailure() async {
-    let upstream = ScriptedLiveLimitProvider([
-        LiveLimits(fiveHourPercent: 0.5),   // good
-        nil,                                 // transient blip
-        LiveLimits(fiveHourPercent: 0.6),   // recovered
-    ])
-    let sticky = StickyLiveLimitProvider(wrapping: upstream)
+    @Test func servesLastGoodValueWhileReportingWhyTheFreshFetchFailed() async {
+        // The core of the sticky contract: a stale-but-real number beats the tier
+        // estimate, but the *reason* must still reach the UI.
+        let inner = ScriptedProvider([
+            LiveFetchResult(limits: LiveLimits(fiveHourPercent: 0.5), outcome: .success),
+            LiveFetchResult(limits: nil, outcome: .rateLimited(retryAfter: nil)),
+        ])
+        let sticky = StickyLiveLimitProvider(wrapping: inner)
 
-    #expect(await sticky.fetch()?.fiveHourPercent == 0.5)
-    #expect(await sticky.fetch()?.fiveHourPercent == 0.5) // served through the blip
-    #expect(await sticky.fetch()?.fiveHourPercent == 0.6) // upstream recovered
-}
+        let first = await sticky.fetch()
+        #expect(first.limits?.fiveHourPercent == 0.5)
+        #expect(first.outcome == .success)
 
-/// The endpoint can 429 for long, indefinite stretches; we always prefer the
-/// stale-but-real live figure to the wildly-off tier estimate, forever.
-@Test func stickyKeepsServingLastGoodIndefinitely() async {
-    let upstream = ScriptedLiveLimitProvider(
-        [LiveLimits(fiveHourPercent: 0.5)] + Array(repeating: nil, count: 50))
-    let sticky = StickyLiveLimitProvider(wrapping: upstream)
+        let second = await sticky.fetch()
+        #expect(second.limits?.fiveHourPercent == 0.5)              // stale but real
+        #expect(second.outcome == .rateLimited(retryAfter: nil))    // reason survives
+    }
 
-    #expect(await sticky.fetch()?.fiveHourPercent == 0.5)   // seed
-    for _ in 0..<50 { #expect(await sticky.fetch()?.fiveHourPercent == 0.5) }
-}
+    @Test func returnsNoLimitsWhenNothingGoodWasEverSeen() async {
+        let inner = ScriptedProvider([LiveFetchResult(limits: nil, outcome: .unauthorized)])
+        let sticky = StickyLiveLimitProvider(wrapping: inner)
+        let out = await sticky.fetch()
+        #expect(out.limits == nil)
+        #expect(out.outcome == .unauthorized)
+    }
 
-@Test func stickyPassesThroughWhenNeverSucceeds() async {
-    let upstream = ScriptedLiveLimitProvider([nil, nil])
-    let sticky = StickyLiveLimitProvider(wrapping: upstream)
-    #expect(await sticky.fetch() == nil)
-    #expect(await sticky.fetch() == nil)
-}
+    @Test func passesDisabledStraightThroughWithoutServingStale() async {
+        // Turning live limits off must cut over to estimates immediately — serving
+        // a cached live number after opt-out would be wrong.
+        let inner = ScriptedProvider([
+            LiveFetchResult(limits: LiveLimits(fiveHourPercent: 0.5), outcome: .success),
+            .disabled,
+        ])
+        let sticky = StickyLiveLimitProvider(wrapping: inner)
+        _ = await sticky.fetch()
+        let out = await sticky.fetch()
+        #expect(out.limits == nil)
+        #expect(out.outcome == .disabled)
+    }
 
-/// The last-good sample (age included) survives a restart: a fresh provider
-/// reading from the same cache file serves it even while upstream is failing.
-@Test func stickyPersistsLastGoodAcrossRestart() async throws {
-    let url = FileManager.default.temporaryDirectory
-        .appendingPathComponent("cctt-live-\(UUID().uuidString).json")
-    defer { try? FileManager.default.removeItem(at: url) }
-
-    let observed = stickyBase
-    let seed = LiveLimits(fiveHourPercent: 0.42, weeklyPercent: 0.11, observedAt: observed)
-    let first = StickyLiveLimitProvider(
-        wrapping: ScriptedLiveLimitProvider([seed]), cacheURL: url)
-    #expect(await first.fetch()?.fiveHourPercent == 0.42)   // writes cache
-
-    // Simulate a relaunch while the endpoint is throttled (upstream only nils).
-    let restarted = StickyLiveLimitProvider(
-        wrapping: ScriptedLiveLimitProvider([nil, nil]), cacheURL: url)
-    let served = await restarted.fetch()
-    #expect(served?.fiveHourPercent == 0.42)
-    #expect(served?.weeklyPercent == 0.11)
-    #expect(served?.observedAt == observed)   // original age preserved for the UI
+    @Test func aFreshSuccessReplacesTheStaleValue() async {
+        let inner = ScriptedProvider([
+            LiveFetchResult(limits: LiveLimits(fiveHourPercent: 0.5), outcome: .success),
+            LiveFetchResult(limits: nil, outcome: .transient),
+            LiveFetchResult(limits: LiveLimits(fiveHourPercent: 0.6), outcome: .success),
+        ])
+        let sticky = StickyLiveLimitProvider(wrapping: inner)
+        _ = await sticky.fetch()
+        _ = await sticky.fetch()
+        let out = await sticky.fetch()
+        #expect(out.limits?.fiveHourPercent == 0.6)
+        #expect(out.outcome == .success)
+    }
 }

@@ -42,7 +42,7 @@ public final class PlanStore {
         let detected = applyOverride(to: PlanDetector.detect(configURL: configURL,
                                                              environment: environment),
                                      settings: settings)
-        let live = await provider.fetch()
+        let live = await provider.fetch().limits
         let newStatus = LimitEngine.status(plan: detected, snapshot: snapshot, caps: caps,
                                            prices: prices, live: live,
                                            apiMonthlyBudgetUSD: settings.apiMonthlyBudgetUSD,

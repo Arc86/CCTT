@@ -31,25 +31,27 @@ public struct LiveLimits: Sendable, Equatable, Codable {
 
 /// Single seam for all live-limit access. The whole app works without it.
 public protocol LiveLimitProvider: Sendable {
-    func fetch() async -> LiveLimits?
+    func fetch() async -> LiveFetchResult
 }
 
 /// Plan-2 default: reports unavailable, so the engine uses the estimate path.
-/// Replaced by a real Keychain + endpoint provider in Plan 4.
 public struct UnavailableLiveLimitProvider: LiveLimitProvider {
     public init() {}
-    public func fetch() async -> LiveLimits? { nil }
+    public func fetch() async -> LiveFetchResult { .disabled }
 }
 
 /// Test / dev provider returning a fixed value.
 public struct StaticLiveLimitProvider: LiveLimitProvider {
     public let value: LiveLimits?
     public init(_ value: LiveLimits?) { self.value = value }
-    public func fetch() async -> LiveLimits? { value }
+    public func fetch() async -> LiveFetchResult {
+        guard let value else { return .disabled }
+        return LiveFetchResult(limits: value, outcome: .success)
+    }
 }
 
 /// Wraps a real provider behind a runtime on/off gate (the user's "Live limits"
-/// setting). While disabled it returns `nil` without consulting the wrapped
+/// setting). While disabled it reports `.disabled` without consulting the wrapped
 /// provider — so no Keychain access or network call happens until opted in.
 public struct GatedLiveLimitProvider: LiveLimitProvider {
     private let wrapped: LiveLimitProvider
@@ -59,17 +61,18 @@ public struct GatedLiveLimitProvider: LiveLimitProvider {
         self.wrapped = wrapped; self.isEnabled = isEnabled
     }
 
-    public func fetch() async -> LiveLimits? {
-        isEnabled() ? await wrapped.fetch() : nil
+    public func fetch() async -> LiveFetchResult {
+        isEnabled() ? await wrapped.fetch() : .disabled
     }
 }
 
-/// Serves the last successful `LiveLimits` through failures of the wrapped
-/// source. The (unofficial) rate-limit endpoint 429s aggressively — often for
-/// extended stretches — and its tier-estimate fallback is wildly off, so we
-/// prefer a *stale but real* live figure to a guessed one, indefinitely. The
-/// sample's `observedAt` timestamp travels with it, letting the UI show its age
-/// ("Live · 12m ago") rather than silently presenting old data as current.
+/// Serves the last successful `LiveLimits` through failures of the wrapped source.
+/// The (unofficial) rate-limit endpoint 429s aggressively — often for extended
+/// stretches — and its tier-estimate fallback is wildly off, so we prefer a *stale
+/// but real* live figure to a guessed one, indefinitely. The sample's `observedAt`
+/// travels with it, and (since the outcome channel was added) so does the reason
+/// the fresh fetch failed, letting the UI show both the number and its health
+/// rather than silently presenting old data as current.
 ///
 /// The last-good value is persisted to `cacheURL` (when provided) so the number
 /// survives an app restart while the endpoint is still throttled. Place this
@@ -87,15 +90,19 @@ public actor StickyLiveLimitProvider: LiveLimitProvider {
         self.lastGood = cacheURL.flatMap(Self.load)
     }
 
-    public func fetch() async -> LiveLimits? {
-        if let fresh = await wrapped.fetch() {
+    public func fetch() async -> LiveFetchResult {
+        let result = await wrapped.fetch()
+        if case .success = result.outcome, let fresh = result.limits {
             lastGood = fresh
             persist(fresh)
-            return fresh
+            return result
         }
-        // No fresh reading: keep serving the last real one (with its original
-        // age) rather than degrading to the tier estimate. Never expires.
-        return lastGood
+        // Opting out must cut over to estimates at once — never serve a cached
+        // live number once the gate is closed.
+        if case .disabled = result.outcome { return result }
+        // No fresh reading: keep serving the last real one (with its original age)
+        // rather than degrading to the tier estimate, but pass the reason along.
+        return LiveFetchResult(limits: lastGood, outcome: result.outcome)
     }
 
     private func persist(_ value: LiveLimits) {
