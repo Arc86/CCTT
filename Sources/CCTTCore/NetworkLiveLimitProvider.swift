@@ -55,6 +55,9 @@ public struct NetworkLiveLimitProvider: LiveLimitProvider {
             await sleep(backoff)
             backoff *= 2
         }
+        // Unreachable: the loop above always returns on its final iteration
+        // (tryIndex == maxRetries fails the `tryIndex < Self.maxRetries` guard).
+        // Present only to satisfy Swift's exhaustiveness checking.
         return LiveFetchResult(limits: nil, outcome: .transient)
     }
 
