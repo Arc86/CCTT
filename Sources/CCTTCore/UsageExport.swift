@@ -31,6 +31,15 @@ private struct Document: Encodable {
     let windows: [Window]
     let credits: Credits?
     let spendLimit: SpendLimit?
+    /// When the live sample behind a `.live` status was actually fetched. `nil`
+    /// when live limits are off or no live sample has ever landed.
+    let liveAsOf: Date?
+    /// Health of the live path, or `nil` when live limits are disabled. A
+    /// statusline consumer needs this to tell a fresh `.live` reading apart
+    /// from `StickyLiveLimitProvider` serving a stale-but-real one indefinitely
+    /// under `.rateLimited`/`.degraded` — otherwise the ever-refreshing
+    /// `generatedAt` above wrongly implies the number itself is current.
+    let liveHealth: String?
 
     init(_ s: PlanStatus) {
         schemaVersion = UsageExport.schemaVersion
@@ -41,6 +50,8 @@ private struct Document: Encodable {
         windows = s.windows.map(Window.init)
         credits = s.credits.map(Credits.init)
         spendLimit = s.spendLimit.map(SpendLimit.init)
+        liveAsOf = s.liveAsOf
+        liveHealth = s.liveHealth.map(Names.liveHealth)
     }
 
     struct Plan: Encodable { let label: String; let kind: String }
@@ -145,6 +156,17 @@ private enum Names {
         case .api:          return "api"
         case .enterprise:   return "enterprise"
         case .unknown:      return "unknown"
+        }
+    }
+
+    /// `.rateLimited`'s `until` is deliberately dropped — the export stays a
+    /// flat string per case, and `until` isn't actionable for a statusline.
+    static func liveHealth(_ h: LiveHealth) -> String {
+        switch h {
+        case .ok:                return "ok"
+        case .rateLimited:       return "rateLimited"
+        case .needsReauth:       return "needsReauth"
+        case .degraded:          return "degraded"
         }
     }
 }

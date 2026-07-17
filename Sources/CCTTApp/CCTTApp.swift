@@ -141,10 +141,15 @@ struct MenuBarLabel: View {
                     if settingsStore.settings.exportEnabled {
                         try? writer.write(planStore.status)
                     }
-                    // The live rate-limit endpoint 429s under frequent polling, so
-                    // PlanStore backs the interval off on failure and snaps it back
-                    // to 120s on success (see PollSchedule).
-                    try? await Task.sleep(for: .seconds(planStore.nextPollInterval))
+                    // This tick's cadence is fixed — it also drives local JSONL
+                    // ingest, alert evaluation, and the export, none of which touch
+                    // the network, so none of them may stall behind a throttled
+                    // endpoint. Only the live *fetch* self-throttles: PlanStore
+                    // consults PollSchedule internally and skips calling the
+                    // endpoint (reusing the last-held reading) until it says to
+                    // retry, backing off on failure and snapping back to base on
+                    // success (see PollSchedule, PlanStore.fetchIfDue).
+                    try? await Task.sleep(for: .seconds(PollSchedule.base))
                 }
             }
         if settingsStore.settings.showPercentInMenuBar {

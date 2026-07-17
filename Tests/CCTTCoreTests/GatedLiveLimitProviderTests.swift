@@ -2,12 +2,22 @@ import Foundation
 import Testing
 @testable import CCTTCore
 
-/// Records whether the wrapped provider was consulted.
+/// Records whether the wrapped provider was consulted. Also usable as a
+/// scripted sequence (`init(script:)`) when a test needs both the call count
+/// and successive different outcomes — e.g. proving a throttled `PlanStore`
+/// fetch is skipped, then resumes once the schedule allows it again.
 final class CountingProvider: LiveLimitProvider, @unchecked Sendable {
-    let result: LiveFetchResult
+    private var script: [LiveFetchResult]
     private(set) var calls = 0
-    init(_ result: LiveFetchResult) { self.result = result }
-    func fetch() async -> LiveFetchResult { calls += 1; return result }
+    init(_ result: LiveFetchResult) { self.script = [result] }
+    init(script: [LiveFetchResult]) { self.script = script }
+    func fetch() async -> LiveFetchResult {
+        calls += 1
+        guard !script.isEmpty else { return .disabled }
+        // A single-result double repeats its one result forever; a scripted
+        // sequence is consumed one call at a time, holding its last entry.
+        return script.count > 1 ? script.removeFirst() : script[0]
+    }
 }
 
 struct GatedLiveLimitProviderTests {

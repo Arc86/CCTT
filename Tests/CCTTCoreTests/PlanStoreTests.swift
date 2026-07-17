@@ -15,6 +15,14 @@ private func writeConfig(_ json: String) -> URL {
 /// don't care about plan detection, just that a config file exists.
 private let fixtureConfigURL = writeConfig(#"{"oauthAccount":{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_5x"}}"#)
 
+/// A clock whose `now` can be advanced mid-test, so tests can simulate real
+/// time passing between two `refresh()` calls (needed once `PlanStore` gates
+/// fetches on elapsed time rather than on call order).
+private final class MutableClock: @unchecked Sendable {
+    var now: Date
+    init(_ now: Date) { self.now = now }
+}
+
 @MainActor
 @Test func refreshDetectsPlanAndComputesEstimate() async {
     let url = writeConfig(#"{"oauthAccount":{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_5x"}}"#)
@@ -97,13 +105,81 @@ private let fixtureConfigURL = writeConfig(#"{"oauthAccount":{"organizationType"
 
 @MainActor
 @Test func aSuccessAfterBackoffSnapsThePollBackToBase() async {
+    // The fetch is now gated on elapsed time (Finding 1), so a genuine second
+    // fetch requires the clock to actually advance past the backed-off
+    // interval — otherwise the second `refresh()` would be throttled and never
+    // reach the provider at all.
+    let clock = MutableClock(now)
     let provider = ScriptedProvider([
         LiveFetchResult(limits: nil, outcome: .transient),
         LiveFetchResult(limits: LiveLimits(fiveHourPercent: 0.4), outcome: .success),
     ])
+    let store = PlanStore(configURL: fixtureConfigURL, provider: provider, clock: { clock.now })
+    await store.refresh(snapshot: .empty(now: clock.now))
+    #expect(store.nextPollInterval == PollSchedule.base * 2)
+    clock.now = clock.now.addingTimeInterval(PollSchedule.base * 2)
+    await store.refresh(snapshot: .empty(now: clock.now))
+    #expect(store.nextPollInterval == PollSchedule.base)
+}
+
+// MARK: - Finding 1: the fetch, not the whole refresh, is what's throttled
+
+@MainActor
+@Test func aThrottledRefreshDoesNotCallTheProviderAgain() async {
+    let provider = CountingProvider(LiveFetchResult(limits: nil, outcome: .transient))
     let store = PlanStore(configURL: fixtureConfigURL, provider: provider, clock: { now })
     await store.refresh(snapshot: .empty(now: now))
-    #expect(store.nextPollInterval == PollSchedule.base * 2)
+    #expect(provider.calls == 1)
     await store.refresh(snapshot: .empty(now: now))
-    #expect(store.nextPollInterval == PollSchedule.base)
+    #expect(provider.calls == 1)   // still inside the backoff window — no re-hit
+}
+
+@MainActor
+@Test func refreshStillProducesAStatusWhileTheFetchIsThrottled() async {
+    let provider = CountingProvider(LiveFetchResult(limits: nil, outcome: .transient))
+    let store = PlanStore(configURL: fixtureConfigURL, provider: provider, clock: { now })
+    await store.refresh(snapshot: .empty(now: now))
+    #expect(provider.calls == 1)
+
+    // A fresh local snapshot arrives (local JSONL ingest keeps running even
+    // while the live fetch is throttled) — the status must reflect it, not go
+    // blank or stale-out, even though no new fetch happens.
+    let snap = aggregate(
+        events: [UsageEvent.fixture(timestamp: now.addingTimeInterval(-600),
+                                    input: 1_000_000, output: 0,
+                                    requestId: "r2", messageId: "m2")],
+        parseErrors: 0, now: now)
+    await store.refresh(snapshot: snap)
+    #expect(provider.calls == 1)   // still throttled
+    #expect(store.status.headlinePercent != nil)
+    #expect(abs(store.status.headlinePercent! - 0.2) < 1e-9)   // 1M / 5M cap, estimate path
+}
+
+@MainActor
+@Test func theFetchResumesOnceTheThrottleIntervalElapses() async {
+    let clock = MutableClock(now)
+    let provider = CountingProvider(script: [
+        LiveFetchResult(limits: nil, outcome: .transient),
+        LiveFetchResult(limits: LiveLimits(fiveHourPercent: 0.4), outcome: .success),
+    ])
+    let store = PlanStore(configURL: fixtureConfigURL, provider: provider, clock: { clock.now })
+    await store.refresh(snapshot: .empty(now: clock.now))
+    #expect(provider.calls == 1)
+
+    clock.now = clock.now.addingTimeInterval(PollSchedule.base * 2)
+    await store.refresh(snapshot: .empty(now: clock.now))
+    #expect(provider.calls == 2)
+    #expect(store.status.provenance == .live)
+    #expect(store.status.headlinePercent == 0.4)
+}
+
+@MainActor
+@Test func disabledNeverThrottlesTheFetch() async {
+    let provider = CountingProvider(LiveFetchResult(limits: nil, outcome: .disabled))
+    let store = PlanStore(configURL: fixtureConfigURL, provider: provider, clock: { now })
+    await store.refresh(snapshot: .empty(now: now))
+    await store.refresh(snapshot: .empty(now: now))
+    await store.refresh(snapshot: .empty(now: now))
+    #expect(provider.calls == 3)   // disabled is free and must never be gated
+    #expect(store.status.liveHealth == nil)
 }

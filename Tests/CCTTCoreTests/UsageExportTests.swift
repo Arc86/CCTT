@@ -102,6 +102,53 @@ private func decode(_ data: Data) throws -> [String: Any] {
     #expect(json["headlinePercent"] == nil)
 }
 
+// MARK: - Finding 2: the health/staleness channel must reach the export
+
+@Test func encodesLiveAsOfAndLiveHealth() throws {
+    // sampleStatus() carries liveAsOf: exportNow, liveHealth: .ok.
+    let json = try decode(try UsageExport.encode(sampleStatus()))
+    #expect(json["liveAsOf"] as? String == "2026-07-17T09:00:00Z")
+    #expect(json["liveHealth"] as? String == "ok")
+}
+
+@Test func encodesRateLimitedHealthAsAFlatString() throws {
+    // `until` is deliberately dropped — the envelope stays flat and simple, and
+    // `until` isn't actionable for a statusline consumer.
+    let w = WindowStatus(kind: .weekly, usedTokens: 1, capTokens: 2, percent: 0.5,
+                         resetsAt: nil, provenance: .live, pace: nil)
+    let status = PlanStatus(kind: .subscription, planLabel: "Max 20x", windows: [w],
+                            credits: nil, costUSD: nil, provenance: .live,
+                            liveAsOf: exportNow,
+                            liveHealth: .rateLimited(until: exportNow.addingTimeInterval(600)),
+                            generatedAt: exportNow)
+    let json = try decode(try UsageExport.encode(status))
+    #expect(json["liveHealth"] as? String == "rateLimited")
+}
+
+@Test func encodesNeedsReauthAndDegradedHealth() throws {
+    let w = WindowStatus(kind: .weekly, usedTokens: 1, capTokens: 2, percent: 0.5,
+                         resetsAt: nil, provenance: .estimated, pace: nil)
+    func status(_ health: LiveHealth) -> PlanStatus {
+        PlanStatus(kind: .subscription, planLabel: "Max 20x", windows: [w],
+                  credits: nil, costUSD: nil, provenance: .estimated,
+                  liveAsOf: exportNow, liveHealth: health, generatedAt: exportNow)
+    }
+    let reauth = try decode(try UsageExport.encode(status(.needsReauth)))
+    #expect(reauth["liveHealth"] as? String == "needsReauth")
+    let degraded = try decode(try UsageExport.encode(status(.degraded)))
+    #expect(degraded["liveHealth"] as? String == "degraded")
+}
+
+@Test func omitsLiveAsOfAndLiveHealthWhenNil() throws {
+    // No `null` values — the keys must be absent entirely, matching how
+    // pace/credits/spendLimit already vanish rather than emitting null.
+    let json = try decode(try UsageExport.encode(.empty(now: exportNow)))
+    #expect(json["liveAsOf"] == nil)
+    #expect(json["liveHealth"] == nil)
+    #expect(json.keys.contains("liveAsOf") == false)
+    #expect(json.keys.contains("liveHealth") == false)
+}
+
 @Test func keysAreSortedSoOutputIsStable() throws {
     let a = try UsageExport.encode(sampleStatus())
     let b = try UsageExport.encode(sampleStatus())

@@ -8,8 +8,12 @@ import Observation
 public final class PlanStore {
     public private(set) var plan: PlanConfig
     public private(set) var status: PlanStatus
-    /// Seconds the app should wait before calling `refresh` again. Driven by
-    /// `PollSchedule`, so a throttled endpoint is polled less, not more.
+    /// The interval `PollSchedule` currently prescribes before the next live
+    /// *fetch* is allowed. Does **not** drive the app's refresh-loop cadence —
+    /// that tick is fixed (see `CCTTApp`'s `.task`, which also runs local
+    /// ingest, alerts, and export and must never stall on a throttled
+    /// endpoint). This only gates whether `refresh()` calls `provider.fetch()`
+    /// or reuses the last-held live reading. Published for visibility/tests.
     public private(set) var nextPollInterval: TimeInterval = PollSchedule.base
 
     private let configURL: URL
@@ -20,6 +24,15 @@ public final class PlanStore {
     private let settingsProvider: @Sendable () -> AppSettings
     private let clock: @Sendable () -> Date
     private var schedule = PollSchedule()
+    /// When the next `provider.fetch()` is allowed. `nil` means always fetch —
+    /// true for the very first `refresh()`, and whenever the last outcome was
+    /// `.disabled` (there is nothing to back off from, so live must keep
+    /// recomputing normally on every tick).
+    private var nextFetchAt: Date?
+    /// The most recent fetch result, held so a gated (skipped) `refresh` can
+    /// still recompute a status — reusing the same reading and outcome rather
+    /// than inventing a new one, so provenance/`liveAsOf` never change on a skip.
+    private var lastFetchResult: LiveFetchResult = .disabled
 
     public init(configURL: URL,
                 environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -46,10 +59,8 @@ public final class PlanStore {
         let detected = applyOverride(to: PlanDetector.detect(configURL: configURL,
                                                              environment: environment),
                                      settings: settings)
-        let result = await provider.fetch()
         let now = clock()
-        schedule = schedule.next(after: result.outcome, now: now)
-        nextPollInterval = schedule.interval
+        let result = await fetchIfDue(now: now)
         let newStatus = LimitEngine.status(plan: detected, snapshot: snapshot, caps: caps,
                                            prices: prices, live: result.limits,
                                            apiMonthlyBudgetUSD: settings.apiMonthlyBudgetUSD,
@@ -58,6 +69,26 @@ public final class PlanStore {
                                            now: now)
         plan = detected
         status = newStatus
+    }
+
+    /// Calls `provider.fetch()` only when `PollSchedule` allows it; otherwise
+    /// reuses the last-held result untouched. This is the fetch-level gate
+    /// `PollSchedule` was designed for — a throttled endpoint must stop being
+    /// hit, but `refresh` itself keeps running on the app's fixed cadence so
+    /// local ingest, alerts, and export are never held hostage to the network.
+    private func fetchIfDue(now: Date) async -> LiveFetchResult {
+        if let nextFetchAt, now < nextFetchAt {
+            return lastFetchResult
+        }
+        let result = await provider.fetch()
+        schedule = schedule.next(after: result.outcome, now: now)
+        nextPollInterval = schedule.interval
+        lastFetchResult = result
+        // `.disabled` must never throttle: there is nothing to back off from,
+        // and the very next refresh should still consult the provider (a
+        // no-cost no-op while live is off) rather than serve a stale skip.
+        nextFetchAt = result.outcome == .disabled ? nil : now.addingTimeInterval(schedule.interval)
+        return result
     }
 
     /// Live health is `nil` when the path is switched off — there is nothing to report.
