@@ -59,6 +59,42 @@ private func decode(_ data: Data) throws -> [String: Any] {
     #expect(window["resetsAt"] == nil)
 }
 
+@Test func encodesCreditsAndSpendLimitWithAllFields() throws {
+    let credits = CreditsStatus(enabled: true, balanceMinorUnits: 4_200,
+                                usedThisPeriodMinorUnits: 800, currency: "USD",
+                                provenance: .billed)
+    let spendLimit = SpendLimitStatus(spentMinorUnits: 15_000, capMinorUnits: 50_000,
+                                      percent: 0.3, resetsAt: exportNow.addingTimeInterval(86_400),
+                                      currency: "EUR", provenance: .derived)
+    let w = WindowStatus(kind: .weekly, usedTokens: 1, capTokens: 2, percent: 0.5,
+                         resetsAt: nil, provenance: .estimated, pace: nil)
+    let status = PlanStatus(kind: .enterprise, planLabel: "Enterprise", windows: [w],
+                            credits: credits, spendLimit: spendLimit, costUSD: nil,
+                            provenance: .estimated, generatedAt: exportNow)
+
+    let json = try decode(try UsageExport.encode(status))
+
+    let c = json["credits"] as! [String: Any]
+    #expect(c["balanceMinorUnits"] as? Int == 4_200)
+    #expect(c["usedThisPeriodMinorUnits"] as? Int == 800)
+    #expect(c["currency"] as? String == "USD")
+    #expect(c["provenance"] as? String == "billed")
+
+    let s = json["spendLimit"] as! [String: Any]
+    #expect(s["spentMinorUnits"] as? Int == 15_000)
+    #expect(s["capMinorUnits"] as? Int == 50_000)
+    #expect(s["percent"] as? Double == 0.3)
+    #expect(s["resetsAt"] as? String == "2026-07-18T09:00:00Z")
+    #expect(s["currency"] as? String == "EUR")
+    #expect(s["provenance"] as? String == "derived")
+}
+
+@Test func omitsCreditsAndSpendLimitWhenAbsent() throws {
+    let json = try decode(try UsageExport.encode(sampleStatus()))
+    #expect(json["credits"] == nil)
+    #expect(json["spendLimit"] == nil)
+}
+
 @Test func encodesAnEmptyStatusWithoutCrashing() throws {
     // Never lie or crash on bad input: an unknown plan still produces valid JSON.
     let json = try decode(try UsageExport.encode(.empty(now: exportNow)))

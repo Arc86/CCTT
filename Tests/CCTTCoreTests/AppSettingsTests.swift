@@ -42,6 +42,7 @@ struct AppSettingsTests {
         #expect(s.alertsEnabled == false)
         #expect(s.thresholds == AlertThresholds.default)
         #expect(s.showPercentInMenuBar == true)   // absent key → default true
+        #expect(s.exportEnabled == false)         // absent key → default false
     }
 }
 
