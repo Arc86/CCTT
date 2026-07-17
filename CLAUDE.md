@@ -58,6 +58,51 @@ UI via SwiftUI previews + snapshot tests across live/estimated/credits/empty/deg
 - Test: `swift test` (Swift Testing; filter with `--filter <TestSuiteOrName>`)
 
 ## Status
+**Anchored windows + pacing + live-fetch classification + export (2026-07-17):** four
+gaps closed, adapted from a comparison against `eddmann/ClaudeMeter` (its data source —
+scraping Claude.ai's web API with a browser session cookie — was **not** adopted; ours
+stays local JSONL + OAuth). **(1) The 5-hour window is now anchored, not trailing.**
+`SessionBlocks` (Core, pure) segments de-duplicated events into ccusage-compatible 5h
+blocks: a block opens at its first event floored to the UTC hour and closes only by
+**ageing out** at `start + 5h` — going idle does *not* reset it (Claude's five hours are
+wall-clock from the first message). `aggregate.fiveHour` is the open block's totals and
+**zero when none is open**, so the number now *resets* at the boundary instead of
+decaying. `UsageSnapshot.fiveHourBlock` carries it to `LimitEngine`, which finally
+populates `resetsAt` on the **estimated** path — estimate-only users get a 5h countdown
+for the first time (it was hard-coded `nil`). **(2) `Pace`** (Core, pure) gives each
+window a burn rate: `ratio` = fraction of cap *projected to be consumed by the window's
+end* (1.4 ⇒ you'd hit 140% by reset), a status (`onTrack`/`atRisk` ≥1.0/`willExceed`
+≥`riskThreshold` 1.2), and `exhaustsAt`. One signature serves both paths —
+`windowStart = windowEnd - duration` — and provenance is *inherited*, never invented.
+Weekly pace is `nil` without live: a rolling window's elapsed fraction is 1.0 by
+construction. Surfaced **only** under the popover gauges, only when off-pace.
+**(3) Live-fetch failures are classified.** `LiveLimitProvider.fetch()` now returns
+`LiveFetchResult` — a **value channel** (`limits`, possibly a stale last-good reading)
+plus a **reason channel** (`LiveFetchOutcome`: success/rateLimited(retryAfter)/
+unauthorized/transient/malformed/disabled). `LiveLimits?` could express neither
+`Gated`'s "disabled ≠ error" nor `Sticky`'s "here's the real stale number *and* why the
+fresh fetch failed". `NetworkLiveLimitProvider` retries **transient only** (2×, 1s→2s,
+injected sleeper); `PollSchedule` (pure) maps outcome → next delay (120s base, ×2 to a
+30-min cap, `Retry-After` honoured only when *longer* than our backoff). Crucially the
+throttle gates **only `provider.fetch()`** inside `PlanStore` — the app's refresh tick
+stays a fixed 120s because it *also* drives JSONL ingest, alerts, and the export, none
+of which touch the network. `PlanStore.resetFetchThrottle()` keeps **Bug A**'s guarantee
+intact: a user-initiated retry (the Live toggle → `LiveLimitsActivation.kick`) is never
+swallowed by backoff meant for background polling. `PlanStatus.liveHealth`
+(ok/rateLimited/needsReauth/degraded, `nil` when off) drives the badge, so a dead token
+says "reconnect" instead of an ever-staler "Live · 3d ago". **(4) Opt-in status export**
+(default **off**): `UsageExport` encodes a versioned, narrow, `sortedKeys` document —
+`schemaVersion`, `generatedAt`, plan, `headlinePercent`, `provenance`, `liveAsOf`,
+`liveHealth`, windows (+`pace`), credits/spendLimit — atomically to `~/.cctt/usage.json`
+on **every** refresh (so `generatedAt` stays honest and a statusline can tell a steady
+state from a dead CCTT). A separate wire-format DTO keeps internal aggregation shapes out
+of the public contract; per-project/model breakdowns are deliberately excluded. CCTT
+still never writes to `~/.claude/`. Also: the menu-bar percent `Text` is now
+`accessibilityHidden` (VoiceOver read it twice), and `UsageColor` documents *why* its
+thresholds are fixed rather than following `AppSettings.thresholds`. Design +
+amendments: `docs/superpowers/specs/2026-07-17-anchored-windows-pacing-export-design.md`.
+279 tests green.
+
 **1.0.x polish — CCTT.app rename + real icon + Keychain (2026-07-11):** the shipped
 bundle is now **`CCTT.app`** (was `CCTTApp.app`) — only the `.app` file name and the
 release zip/URL naming (`CCTT-<version>.zip`) changed; `CFBundleIdentifier` /
