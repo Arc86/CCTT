@@ -152,6 +152,15 @@ struct MenuBarLabel: View {
                     try? await Task.sleep(for: .seconds(PollSchedule.base))
                 }
             }
+            // On wake the live endpoint is usually mid-backoff (Wi-Fi wasn't up
+            // when the pre-sleep poll failed, so PollSchedule had doubled toward
+            // its 30-min cap). Clearing the throttle and refreshing here restarts
+            // recovery from base immediately instead of leaving stale data on
+            // screen until the capped backoff elapses. didWakeNotification is
+            // posted on NSWorkspace's own center, not the default one.
+            .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
+                LiveLimitsActivation.forceReconnect(planStore, store)
+            }
         if settingsStore.settings.showPercentInMenuBar {
             Text(DefaultPaths.formatPercent(planStore.status,
                                             fallbackTokens: store.snapshot.overall.total))
@@ -186,11 +195,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum LiveLimitsActivation {
     static func kick(_ planStore: PlanStore, _ usage: UsageStore) {
         NSApp.activate(ignoringOtherApps: true)
-        // A direct user request (opt-in, or retry after a denied Keychain
-        // prompt) must never be silently swallowed by the background-poll
-        // throttle — clear it so this refresh is guaranteed to reach the
-        // provider and the prompt appears on the click.
+        forceReconnect(planStore, usage)
+    }
+
+    /// Force the next refresh to re-contact the live endpoint, bypassing any
+    /// active poll backoff, and re-scan local usage. Unlike `kick` it does **not**
+    /// bring the app forward, so it's safe for the manual refresh button and the
+    /// wake-from-sleep handler (which must not steal focus). Clearing the throttle
+    /// is what makes these a real reconnect: without it, `PlanStore.refresh` inside
+    /// a backoff window just replays the last-held reading and never re-hits the
+    /// endpoint — the reason the refresh button "didn't force anything".
+    static func forceReconnect(_ planStore: PlanStore, _ usage: UsageStore) {
         planStore.resetFetchThrottle()
+        usage.refresh()
         Task { await planStore.refresh(snapshot: usage.snapshot) }
     }
 }

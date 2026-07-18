@@ -18,6 +18,7 @@ struct PopoverView: View {
         VStack(alignment: .leading, spacing: 13) {
             header
             limits
+            reconnectBanner
 
             if hasSecondarySections {
                 Divider()
@@ -64,6 +65,38 @@ struct PopoverView: View {
                     LimitGaugeRow(name: windowName(w.kind), window: w)
                 }
             }
+        }
+    }
+
+    // MARK: Reconnect
+
+    /// An explicit, always-visible way to re-establish the live connection when it
+    /// has dropped — the manual escape hatch that was missing. Shown only when the
+    /// live path reports an *actionable* problem: a dead token (`needsReauth`) or a
+    /// transient/shape failure (`degraded`, the usual state right after wake).
+    /// Deliberately hidden for `rateLimited` (retrying would only deepen the 429)
+    /// and when live is healthy or switched off. `kick` — not `forceReconnect` —
+    /// so the app comes forward and any Keychain re-auth prompt can surface.
+    @ViewBuilder private var reconnectBanner: some View {
+        if let message = reconnectMessage {
+            HStack(spacing: 8) {
+                Image(systemName: "bolt.horizontal.circle").foregroundStyle(.orange)
+                Text(message).font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Reconnect") { LiveLimitsActivation.kick(planStore, store) }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// The banner's copy, or `nil` when no reconnect affordance should appear.
+    private var reconnectMessage: String? {
+        switch status.liveHealth {
+        case .needsReauth: return "Live sign-in expired."
+        case .degraded:    return "Live limits disconnected."
+        case .ok, .rateLimited, .none: return nil
         }
     }
 
@@ -157,10 +190,12 @@ struct PopoverView: View {
         .font(.callout)
     }
 
-    /// Manual refresh: re-scan events, then recompute the limit status.
+    /// Manual refresh: force a live re-fetch (clearing any active poll backoff),
+    /// re-scan events, and recompute the limit status. Clearing the throttle is
+    /// what makes the button a real reconnect rather than a recompute of the
+    /// last-held live reading.
     private func refresh() {
-        store.refresh()
-        Task { await planStore.refresh(snapshot: store.snapshot) }
+        LiveLimitsActivation.forceReconnect(planStore, store)
     }
 
     // MARK: Formatting
